@@ -1,4 +1,4 @@
-# main.py (Final com Automação Integrada)
+# main.py (Versão Final Completa)
 import sqlite3
 import os
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
@@ -21,10 +21,16 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- CÓDIGO DA AUTOMAÇÃO (movido de automacao.py para cá) ---
+# --- CÓDIGO DA AUTOMAÇÃO ---
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
+
+def get_db_connection():
+    """Cria uma conexão com o banco de dados. Reusada por várias funções."""
+    conn = sqlite3.connect('automacao.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     conn.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (?, ?)', (cliente_id, link_noticia))
@@ -91,7 +97,6 @@ def publicar_no_instagram(url_imagem, legenda, cliente):
         return False
 
 def publicar_no_facebook(url_imagem, legenda, cliente):
-    # (A função de publicar no Facebook continua a mesma)
     print("📤 Publicando no Facebook...")
     token = cliente['meta_api_token']
     page_id = cliente['facebook_page_id']
@@ -109,12 +114,18 @@ def publicar_no_facebook(url_imagem, legenda, cliente):
         return False
 
 def criar_imagem_post(noticia, cliente):
-    # (A função de criar imagem continua a mesma, já com o .upper())
     print("🎨 Criando imagem do post...")
     titulo = noticia.title.upper()
     categoria = (noticia.tags[0].term if hasattr(noticia, 'tags') and noticia.tags else "").upper()
-    url_imagem_noticia = noticia.links[1].href if hasattr(noticia, 'links') and len(noticia.links) > 1 and noticia.links[1].type.startswith('image/') else None
-    if not url_imagem_noticia: return None
+    url_imagem_noticia = None
+    if 'links' in noticia:
+        for link in noticia.links:
+            if 'type' in link and link.type.startswith('image/'):
+                url_imagem_noticia = link.href
+                break
+    if not url_imagem_noticia:
+        print("⚠️ Nenhuma imagem encontrada no post RSS.")
+        return None
     cor_fundo = cliente['cor_fundo_geral'] or '#051d40'
     fundo = Image.new('RGBA', (IMG_WIDTH, IMG_HEIGHT), cor_fundo)
     draw = ImageDraw.Draw(fundo)
@@ -165,7 +176,6 @@ def criar_imagem_post(noticia, cliente):
     print("✅ Imagem criada!"); return buffer_saida.getvalue()
 
 def rodar_automacao_completa():
-    """Função que executa toda a lógica de automação."""
     log_execucao = []
     conn = get_db_connection()
     clientes_ativos = conn.execute('SELECT * FROM clientes WHERE ativo = 1').fetchall()
@@ -182,3 +192,128 @@ def rodar_automacao_completa():
         imagem_bytes = criar_imagem_post(noticia_para_postar, cliente)
         if not imagem_bytes: continue
         nome_arquivo = f"post_{cliente['id']}_{int(datetime.now().timestamp())}.jpg"
+        link_imagem_publica = upload_para_google_drive(imagem_bytes, nome_arquivo)
+        if not link_imagem_publica: continue
+        legenda = gerar_legenda(noticia_para_postar, cliente)
+        publicar_no_instagram(link_imagem_publica, legenda, cliente)
+        publicar_no_facebook(link_imagem_publica, legenda, cliente)
+        marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
+        log_execucao.append(f"--- Processo para {cliente['nome_cliente']} concluído. ---")
+    conn.close()
+    return log_execucao
+
+# --- ROTA SECRETA PARA AGENDADOR ---
+@app.route('/rodar-automacao-agora')
+def rota_automacao():
+    print("🚀 Disparando automação via rota secreta...")
+    logs = rodar_automacao_completa()
+    print("🏁 Automação finalizada.")
+    return jsonify(logs)
+
+# --- ROTAS DO PAINEL DE CONTROLE (CRUD) ---
+def get_cliente(cliente_id):
+    conn = get_db_connection()
+    cliente = conn.execute('SELECT * FROM clientes WHERE id = ?', (cliente_id,)).fetchone()
+    conn.close()
+    if cliente is None: abort(404)
+    return cliente
+
+@app.route('/')
+def index():
+    conn = get_db_connection()
+    clientes_db = conn.execute('SELECT * FROM clientes ORDER BY nome_cliente').fetchall()
+    clientes_com_feeds = []
+    for cliente in clientes_db:
+        cliente_dict = dict(cliente)
+        feeds = conn.execute('SELECT url FROM rss_feeds WHERE cliente_id = ?', (cliente['id'],)).fetchall()
+        cliente_dict['feeds'] = feeds
+        clientes_com_feeds.append(cliente_dict)
+    conn.close()
+    return render_template('index.html', clientes=clientes_com_feeds)
+
+@app.route('/adicionar', methods=('GET', 'POST'))
+def adicionar():
+    if request.method == 'POST':
+        nome_cliente = request.form['nome_cliente']
+        ativo = 1 if 'ativo' in request.form else 0
+        layout_imagem = request.form['layout_imagem']
+        hashtags_fixas = request.form['hashtags_fixas']
+        cor_fundo_geral = request.form['cor_fundo_geral']
+        cor_caixa_titulo = request.form['cor_caixa_titulo']
+        cor_faixa_categoria = request.form['cor_faixa_categoria']
+        cor_texto_titulo = request.form['cor_texto_titulo']
+        cor_texto_categoria = request.form['cor_texto_categoria']
+        meta_api_token = request.form['meta_api_token']
+        instagram_id = request.form['instagram_id']
+        facebook_page_id = request.form['facebook_page_id']
+        paths = {'logo': None, 'fonte_titulo': None, 'fonte_categoria': None}
+        for tipo in ['logo', 'fonte_titulo', 'fonte_categoria']:
+            if tipo in request.files and request.files[tipo].filename != '':
+                arquivo = request.files[tipo]
+                nome_seguro = secure_filename(arquivo.filename)
+                caminho_salvar = os.path.join(app.config['UPLOAD_FOLDER'], nome_seguro)
+                arquivo.save(caminho_salvar)
+                paths[tipo] = caminho_salvar
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
+        novo_cliente_id = cursor.lastrowid
+        rss_urls_texto = request.form['rss_urls']
+        urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
+        for url in urls:
+            conn.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (?, ?)', (novo_cliente_id, url))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('index'))
+    return render_template('adicionar_cliente.html')
+
+@app.route('/editar/<int:id>', methods=('GET', 'POST'))
+def editar(id):
+    cliente = get_cliente(id)
+    conn = get_db_connection()
+    if request.method == 'POST':
+        nome_cliente = request.form['nome_cliente']
+        ativo = 1 if 'ativo' in request.form else 0
+        layout_imagem = request.form['layout_imagem']
+        hashtags_fixas = request.form['hashtags_fixas']
+        cor_fundo_geral = request.form['cor_fundo_geral']
+        cor_caixa_titulo = request.form['cor_caixa_titulo']
+        cor_faixa_categoria = request.form['cor_faixa_categoria']
+        cor_texto_titulo = request.form['cor_texto_titulo']
+        cor_texto_categoria = request.form['cor_texto_categoria']
+        meta_api_token = request.form['meta_api_token']
+        instagram_id = request.form['instagram_id']
+        facebook_page_id = request.form['facebook_page_id']
+        paths = {'logo': cliente['logo_path'], 'fonte_titulo': cliente['fonte_titulo_path'], 'fonte_categoria': cliente['fonte_categoria_path']}
+        for tipo in ['logo', 'fonte_titulo', 'fonte_categoria']:
+            if tipo in request.files and request.files[tipo].filename != '':
+                arquivo = request.files[tipo]
+                nome_seguro = secure_filename(arquivo.filename)
+                caminho_salvar = os.path.join(app.config['UPLOAD_FOLDER'], nome_seguro)
+                arquivo.save(caminho_salvar)
+                paths[tipo] = caminho_salvar
+        conn.execute('''UPDATE clientes SET nome_cliente = ?, ativo = ?, layout_imagem = ?, hashtags_fixas = ?, logo_path = ?, fonte_titulo_path = ?, fonte_categoria_path = ?, cor_fundo_geral = ?, cor_caixa_titulo = ?, cor_faixa_categoria = ?, cor_texto_titulo = ?, cor_texto_categoria = ?, meta_api_token = ?, instagram_id = ?, facebook_page_id = ? WHERE id = ?''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, id))
+        conn.execute('DELETE FROM rss_feeds WHERE cliente_id = ?', (id,))
+        rss_urls_texto = request.form['rss_urls']
+        urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
+        for url in urls:
+            conn.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (?, ?)', (id, url))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('index'))
+    feeds_db = conn.execute('SELECT url FROM rss_feeds WHERE cliente_id = ?', (id,)).fetchall()
+    conn.close()
+    rss_urls_texto = "\n".join([feed['url'] for feed in feeds_db])
+    return render_template('editar_cliente.html', cliente=cliente, rss_urls_texto=rss_urls_texto)
+
+@app.route('/excluir/<int:id>', methods=('POST', 'GET'))
+def excluir(id):
+    get_cliente(id)
+    conn = get_db_connection()
+    conn.execute('DELETE FROM clientes WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001, debug=True)
