@@ -1,11 +1,10 @@
-# main.py (Versão Final Completa)
+# main.py (Versão Final com Assets no Google Drive)
 import sqlite3
 import os
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 from werkzeug.utils import secure_filename
 from database import criar_banco_de_dados
 
-# Importamos as bibliotecas da automação
 import feedparser
 import requests
 import io
@@ -13,16 +12,12 @@ import textwrap
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from datetime import datetime
 from time import mktime
-from google_drive import upload_para_google_drive
+from google_drive import upload_para_google_drive, upload_asset_para_drive, baixar_asset_do_drive
 from bs4 import BeautifulSoup
 
-# --- CONFIGURAÇÃO INICIAL (O app é criado aqui, no topo!) ---
 criar_banco_de_dados()
 app = Flask(__name__)
-UPLOAD_FOLDER = 'static/uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- CÓDIGO DA AUTOMAÇÃO ---
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
 
@@ -116,23 +111,24 @@ def criar_imagem_post(noticia, cliente):
     titulo = noticia.title.upper()
     categoria = (noticia.tags[0].term if hasattr(noticia, 'tags') and noticia.tags else "").upper()
     url_imagem_noticia = None
-    if 'links' in noticia:
+    if hasattr(noticia, 'links'):
         for link in noticia.links:
-            if 'type' in link and link.type.startswith('image/'):
+            if link.get('type', '').startswith('image/'):
                 url_imagem_noticia = link.href
                 break
-    if not url_imagem_noticia and 'media_content' in noticia:
+    if not url_imagem_noticia and hasattr(noticia, 'media_content'):
         for media in noticia.media_content:
-            if 'type' in media and media['type'].startswith('image/'):
-                url_imagem_noticia = media['url']
+            if media.get('type', '').startswith('image/'):
+                url_imagem_noticia = media.get('url')
                 break
-    if not url_imagem_noticia and 'summary' in noticia:
-        soup = BeautifulSoup(noticia.summary, 'html.parser')
+    html_content = noticia.summary if hasattr(noticia, 'summary') else ""
+    if not url_imagem_noticia and html_content:
+        soup = BeautifulSoup(html_content, 'html.parser')
         img_tag = soup.find('img')
-        if img_tag and 'src' in img_tag.attrs:
+        if img_tag and img_tag.get('src'):
             url_imagem_noticia = img_tag['src']
     if not url_imagem_noticia:
-        print("⚠️ Nenhuma imagem encontrada no post RSS após todas as tentativas.")
+        print("⚠️ Nenhuma imagem encontrada no post RSS.")
         return None
     print(f"🖼️ Imagem encontrada: {url_imagem_noticia}")
     cor_fundo = cliente['cor_fundo_geral'] or '#051d40'
@@ -153,31 +149,37 @@ def criar_imagem_post(noticia, cliente):
             pos_img_x = (IMG_WIDTH - img_w) // 2
             fundo.paste(imagem_noticia_resized, (pos_img_x, 50))
     except Exception as e:
-        print(f"❌ Erro ao processar imagem da notícia: {e}")
-        return None
+        print(f"❌ Erro ao processar imagem da notícia: {e}"); return None
     if cliente['logo_path']:
         try:
-            logo = Image.open(cliente['logo_path']).convert("RGBA")
-            logo.thumbnail((200, 100)); fundo.paste(logo, (70, 70), logo)
-        except Exception as e: print(f"⚠️ Erro no logo: {e}")
+            logo_stream = baixar_asset_do_drive(cliente['logo_path'])
+            if logo_stream:
+                logo = Image.open(logo_stream).convert("RGBA")
+                logo.thumbnail((200, 100)); fundo.paste(logo, (70, 70), logo)
+        except Exception as e: print(f"⚠️ Erro ao carregar logo do Drive: {e}")
     if categoria and cliente['fonte_categoria_path']:
         try:
-            fonte_cat = ImageFont.truetype(cliente['fonte_categoria_path'], 40)
-            pos_y_cat = 650
-            if cliente['cor_faixa_categoria']: draw.rectangle([(50, pos_y_cat - 25), (IMG_WIDTH - 50, pos_y_cat + 25)], fill=cliente['cor_faixa_categoria'])
-            draw.text((IMG_WIDTH / 2, pos_y_cat), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or '#FFD700', anchor="mm", align="center")
+            cat_stream = baixar_asset_do_drive(cliente['fonte_categoria_path'])
+            if cat_stream:
+                fonte_cat = ImageFont.truetype(cat_stream, 40)
+                pos_y_cat = 650
+                if cliente['cor_faixa_categoria']: draw.rectangle([(50, pos_y_cat - 25), (IMG_WIDTH - 50, pos_y_cat + 25)], fill=cliente['cor_faixa_categoria'])
+                draw.text((IMG_WIDTH / 2, pos_y_cat), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or '#FFD700', anchor="mm", align="center")
         except Exception as e: print(f"⚠️ Erro na categoria: {e}")
     try:
-        fonte_titulo = ImageFont.truetype(cliente['fonte_titulo_path'], 70)
-        linhas_texto = textwrap.wrap(titulo, width=28)
-        texto_junto = "\n".join(linhas_texto)
-        pos_y_titulo = 800
-        if cliente['cor_caixa_titulo']: draw.rectangle([(50, pos_y_titulo - 100), (IMG_WIDTH - 50, pos_y_titulo + 100)], fill=cliente['cor_caixa_titulo'])
-        draw.text((IMG_WIDTH / 2, pos_y_titulo), texto_junto, font=fonte_titulo, fill=cliente['cor_texto_titulo'] or '#FFFFFF', anchor="mm", align="center")
+        titulo_stream = baixar_asset_do_drive(cliente['fonte_titulo_path'])
+        if titulo_stream:
+            fonte_titulo = ImageFont.truetype(titulo_stream, 70)
+            linhas_texto = textwrap.wrap(titulo, width=28)
+            texto_junto = "\n".join(linhas_texto)
+            pos_y_titulo = 800
+            if cliente['cor_caixa_titulo']: draw.rectangle([(50, pos_y_titulo - 100), (IMG_WIDTH - 50, pos_y_titulo + 100)], fill=cliente['cor_caixa_titulo'])
+            draw.text((IMG_WIDTH / 2, pos_y_titulo), texto_junto, font=fonte_titulo, fill=cliente['cor_texto_titulo'] or '#FFFFFF', anchor="mm", align="center")
     except Exception as e:
         print(f"❌ Erro no título: {e}"); return None
     try:
-        fonte_assinatura = ImageFont.truetype("Raleway-VariableFont_wght.ttf", 20)
+        raleway_stream = baixar_asset_do_drive('1I6-kO_I_y_y_3y3...ID_DA_FONTE_RALEWAY') # Placeholder - ajuste se necessário
+        fonte_assinatura = ImageFont.truetype(raleway_stream or "Raleway-VariableFont_wght.ttf", 20)
         draw.text((IMG_WIDTH / 2, IMG_HEIGHT - 15), ASSINATURA, font=fonte_assinatura, fill=(200, 200, 200, 255), anchor="ms", align="center")
     except Exception: pass
     buffer_saida = io.BytesIO()
@@ -211,7 +213,6 @@ def rodar_automacao_completa():
     conn.close()
     return log_execucao
 
-# --- ROTA SECRETA PARA AGENDADOR ---
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
     print("🚀 Disparando automação via rota secreta...")
@@ -219,7 +220,6 @@ def rota_automacao():
     print("🏁 Automação finalizada.")
     return jsonify(logs)
 
-# --- ROTAS DO PAINEL DE CONTROLE (CRUD) ---
 def get_cliente(cliente_id):
     conn = get_db_connection()
     cliente = conn.execute('SELECT * FROM clientes WHERE id = ?', (cliente_id,)).fetchone()
@@ -255,17 +255,20 @@ def adicionar():
         meta_api_token = request.form['meta_api_token']
         instagram_id = request.form['instagram_id']
         facebook_page_id = request.form['facebook_page_id']
+        
         paths = {'logo': None, 'fonte_titulo': None, 'fonte_categoria': None}
         for tipo in ['logo', 'fonte_titulo', 'fonte_categoria']:
             if tipo in request.files and request.files[tipo].filename != '':
                 arquivo = request.files[tipo]
-                nome_seguro = secure_filename(arquivo.filename)
-                caminho_salvar = os.path.join(app.config['UPLOAD_FOLDER'], nome_seguro)
-                arquivo.save(caminho_salvar)
-                paths[tipo] = caminho_salvar
+                file_id = upload_asset_para_drive(io.BytesIO(arquivo.read()), arquivo.filename, arquivo.mimetype)
+                paths[tipo] = file_id
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('''INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
+        cursor.execute('''
+            INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
+        
         novo_cliente_id = cursor.lastrowid
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
@@ -293,23 +296,26 @@ def editar(id):
         meta_api_token = request.form['meta_api_token']
         instagram_id = request.form['instagram_id']
         facebook_page_id = request.form['facebook_page_id']
+        
         paths = {'logo': cliente['logo_path'], 'fonte_titulo': cliente['fonte_titulo_path'], 'fonte_categoria': cliente['fonte_categoria_path']}
         for tipo in ['logo', 'fonte_titulo', 'fonte_categoria']:
             if tipo in request.files and request.files[tipo].filename != '':
                 arquivo = request.files[tipo]
-                nome_seguro = secure_filename(arquivo.filename)
-                caminho_salvar = os.path.join(app.config['UPLOAD_FOLDER'], nome_seguro)
-                arquivo.save(caminho_salvar)
-                paths[tipo] = caminho_salvar
+                file_id = upload_asset_para_drive(io.BytesIO(arquivo.read()), arquivo.filename, arquivo.mimetype)
+                paths[tipo] = file_id
+        
         conn.execute('''UPDATE clientes SET nome_cliente = ?, ativo = ?, layout_imagem = ?, hashtags_fixas = ?, logo_path = ?, fonte_titulo_path = ?, fonte_categoria_path = ?, cor_fundo_geral = ?, cor_caixa_titulo = ?, cor_faixa_categoria = ?, cor_texto_titulo = ?, cor_texto_categoria = ?, meta_api_token = ?, instagram_id = ?, facebook_page_id = ? WHERE id = ?''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, id))
+        
         conn.execute('DELETE FROM rss_feeds WHERE cliente_id = ?', (id,))
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
         for url in urls:
             conn.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (?, ?)', (id, url))
+        
         conn.commit()
         conn.close()
         return redirect(url_for('index'))
+    
     feeds_db = conn.execute('SELECT url FROM rss_feeds WHERE cliente_id = ?', (id,)).fetchall()
     conn.close()
     rss_urls_texto = "\n".join([feed['url'] for feed in feeds_db])
