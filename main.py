@@ -14,21 +14,19 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from datetime import datetime
 from time import mktime
 from google_drive import upload_para_google_drive
-from bs4 import BeautifulSoup # Importamos o BeautifulSoup no topo
+from bs4 import BeautifulSoup
 
-# --- CONFIGURAÇÃO INICIAL ---
+# --- CONFIGURAÇÃO INICIAL (O app é criado aqui, no topo!) ---
 criar_banco_de_dados()
 app = Flask(__name__)
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # --- CÓDIGO DA AUTOMAÇÃO ---
-
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
 
 def get_db_connection():
-    """Cria uma conexão com o banco de dados. Reusada por várias funções."""
     conn = sqlite3.connect('automacao.db')
     conn.row_factory = sqlite3.Row
     return conn
