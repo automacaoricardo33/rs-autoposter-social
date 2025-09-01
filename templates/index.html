@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}
+Dashboard - Painel de Automação
+{% endblock %}
+
+{% block content %}
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h1>Dashboard de Clientes</h1>
+    <a href="{{ url_for('adicionar') }}" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">
+      + Adicionar Novo Cliente
+    </a>
+  </div>
+
+  <hr>
+
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead style="background-color: #e9ecef;">
+      <tr>
+        <th style="padding: 12px; text-align: left;">Nome do Cliente</th>
+        <th style="padding: 12px; text-align: left;">Feeds RSS</th>
+        <th style="padding: 12px; text-align: left;">Ativo</th>
+        <th style="padding: 12px; text-align: left;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cliente in clientes %}
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 12px;">{{ cliente['nome_cliente'] }}</td>
+          <td style="padding: 12px; font-size: 0.9em;">
+            <ul style="margin: 0; padding-left: 15px;">
+              {% for feed in cliente.feeds %}
+                <li>{{ feed['url'] }}</li>
+              {% endfor %}
+            </ul>
+          </td>
+          <td style="padding: 12px;">{% if cliente['ativo'] == 1 %}Sim{% else %}Não{% endif %}</td>
+          <td style="padding: 12px;">
+            <a href="{{ url_for('editar', id=cliente['id']) }}">Editar</a> |
+            <a href="{{ url_for('excluir', id=cliente['id']) }}" 
+               onclick="return confirm('Tem certeza que deseja excluir este cliente?');" 
+               style="color: red;">Excluir</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" style="text-align: center; padding: 20px;">
+            Nenhum cliente cadastrado ainda. Clique em "Adicionar Novo Cliente" para começar.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+{% endblock %}

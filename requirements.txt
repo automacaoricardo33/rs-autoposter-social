@@ -1,0 +1,10 @@
+# requirements.txt
+Flask
+gunicorn
+Pillow
+python-dotenv
+requests
+beautifulsoup4
+feedparser
+google-api-python-client
+google-auth-oauthlib
