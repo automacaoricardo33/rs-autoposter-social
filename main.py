@@ -1,4 +1,4 @@
-# main.py (Versão Final Completa)
+# main.py (Versão Final com busca de imagem SUPERIOR)
 import sqlite3
 import os
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
@@ -16,13 +16,8 @@ from time import mktime
 from google_drive import upload_para_google_drive
 from bs4 import BeautifulSoup
 
-# --- CONFIGURAÇÃO INICIAL (O app é criado aqui, no topo!) ---
-criar_banco_de_dados()
-app = Flask(__name__)
-UPLOAD_FOLDER = 'static/uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# --- CÓDIGO DA AUTOMAÇÃO ---
+# --- CONFIGURAÇÃO INICIAL E CONSTANTES ---
+# ... (todo o resto do código continua igual até a função criar_imagem_post) ...
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
 
@@ -31,6 +26,7 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+# (TODAS AS OUTRAS FUNÇÕES COMO buscar_noticias_novas, gerar_legenda, etc. permanecem aqui, exatamente como antes)
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     conn.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (?, ?)', (cliente_id, link_noticia))
     conn.commit()
@@ -111,33 +107,55 @@ def publicar_no_facebook(url_imagem, legenda, cliente):
         print(f"❌ Erro no Facebook: {e}")
         return False
 
+
+# --- FUNÇÃO DE CRIAÇÃO DE IMAGEM ATUALIZADA ---
 def criar_imagem_post(noticia, cliente):
     print("🎨 Criando imagem do post...")
+    
     titulo = noticia.title.upper()
     categoria = (noticia.tags[0].term if hasattr(noticia, 'tags') and noticia.tags else "").upper()
+    
+    # --- LÓGICA DE BUSCA DE IMAGEM ATUALIZADA (v3) ---
     url_imagem_noticia = None
-    if 'links' in noticia:
+    # Tentativa 1: Procurar em 'links' com tipo de imagem
+    if hasattr(noticia, 'links'):
         for link in noticia.links:
-            if 'type' in link and link.type.startswith('image/'):
+            if link.get('type', '').startswith('image/'):
                 url_imagem_noticia = link.href
                 break
-    if not url_imagem_noticia and 'media_content' in noticia:
+    
+    # Tentativa 2: Procurar em 'media_content'
+    if not url_imagem_noticia and hasattr(noticia, 'media_content'):
         for media in noticia.media_content:
-            if 'type' in media and media['type'].startswith('image/'):
-                url_imagem_noticia = media['url']
+            if media.get('type', '').startswith('image/'):
+                url_imagem_noticia = media.get('url')
                 break
-    if not url_imagem_noticia and 'summary' in noticia:
-        soup = BeautifulSoup(noticia.summary, 'html.parser')
-        img_tag = soup.find('img')
-        if img_tag and 'src' in img_tag.attrs:
+
+    # Tentativa 3: "Raspar" o HTML do resumo (summary) ou conteúdo (content)
+    # Esta é a parte que foi aprimorada
+    html_content = ""
+    if hasattr(noticia, 'content'):
+        html_content = noticia.content[0].value
+    elif hasattr(noticia, 'summary'):
+        html_content = noticia.summary
+
+    if not url_imagem_noticia and html_content:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        img_tag = soup.find('img') # Procura pela primeira tag <img>
+        if img_tag and img_tag.get('src'):
             url_imagem_noticia = img_tag['src']
+            
     if not url_imagem_noticia:
         print("⚠️ Nenhuma imagem encontrada no post RSS após todas as tentativas.")
         return None
+    # --- FIM DA LÓGICA DE BUSCA DE IMAGEM ---
+
     print(f"🖼️ Imagem encontrada: {url_imagem_noticia}")
+    
     cor_fundo = cliente['cor_fundo_geral'] or '#051d40'
     fundo = Image.new('RGBA', (IMG_WIDTH, IMG_HEIGHT), cor_fundo)
     draw = ImageDraw.Draw(fundo)
+    
     try:
         response_img = requests.get(url_imagem_noticia, stream=True, headers={'User-Agent': 'Mozilla/5.0'}); response_img.raise_for_status()
         imagem_noticia = Image.open(io.BytesIO(response_img.content)).convert("RGBA")
@@ -155,11 +173,13 @@ def criar_imagem_post(noticia, cliente):
     except Exception as e:
         print(f"❌ Erro ao processar imagem da notícia: {e}")
         return None
+        
     if cliente['logo_path']:
         try:
             logo = Image.open(cliente['logo_path']).convert("RGBA")
             logo.thumbnail((200, 100)); fundo.paste(logo, (70, 70), logo)
         except Exception as e: print(f"⚠️ Erro no logo: {e}")
+        
     if categoria and cliente['fonte_categoria_path']:
         try:
             fonte_cat = ImageFont.truetype(cliente['fonte_categoria_path'], 40)
@@ -167,6 +187,7 @@ def criar_imagem_post(noticia, cliente):
             if cliente['cor_faixa_categoria']: draw.rectangle([(50, pos_y_cat - 25), (IMG_WIDTH - 50, pos_y_cat + 25)], fill=cliente['cor_faixa_categoria'])
             draw.text((IMG_WIDTH / 2, pos_y_cat), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or '#FFD700', anchor="mm", align="center")
         except Exception as e: print(f"⚠️ Erro na categoria: {e}")
+        
     try:
         fonte_titulo = ImageFont.truetype(cliente['fonte_titulo_path'], 70)
         linhas_texto = textwrap.wrap(titulo, width=28)
@@ -176,14 +197,17 @@ def criar_imagem_post(noticia, cliente):
         draw.text((IMG_WIDTH / 2, pos_y_titulo), texto_junto, font=fonte_titulo, fill=cliente['cor_texto_titulo'] or '#FFFFFF', anchor="mm", align="center")
     except Exception as e:
         print(f"❌ Erro no título: {e}"); return None
+        
     try:
         fonte_assinatura = ImageFont.truetype("Raleway-VariableFont_wght.ttf", 20)
         draw.text((IMG_WIDTH / 2, IMG_HEIGHT - 15), ASSINATURA, font=fonte_assinatura, fill=(200, 200, 200, 255), anchor="ms", align="center")
     except Exception: pass
+    
     buffer_saida = io.BytesIO()
     fundo.convert("RGB").save(buffer_saida, format='JPEG', quality=90)
     print("✅ Imagem criada!"); return buffer_saida.getvalue()
 
+# (O resto do arquivo, com a função rodar_automacao_completa e as rotas do painel, continua exatamente igual)
 def rodar_automacao_completa():
     log_execucao = []
     conn = get_db_connection()
@@ -211,7 +235,6 @@ def rodar_automacao_completa():
     conn.close()
     return log_execucao
 
-# --- ROTA SECRETA PARA AGENDADOR ---
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
     print("🚀 Disparando automação via rota secreta...")
@@ -219,7 +242,6 @@ def rota_automacao():
     print("🏁 Automação finalizada.")
     return jsonify(logs)
 
-# --- ROTAS DO PAINEL DE CONTROLE (CRUD) ---
 def get_cliente(cliente_id):
     conn = get_db_connection()
     cliente = conn.execute('SELECT * FROM clientes WHERE id = ?', (cliente_id,)).fetchone()
