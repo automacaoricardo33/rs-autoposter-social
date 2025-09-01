@@ -1,9 +1,11 @@
-# main.py (Versão Final com Assets no Google Drive)
-import sqlite3
+# main.py (Versão Final com PostgreSQL)
 import os
+import psycopg2
+import psycopg2.extras # Importante para resultados como dicionário
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 from werkzeug.utils import secure_filename
 from database import criar_banco_de_dados
+from dotenv import load_dotenv
 
 import feedparser
 import requests
@@ -15,27 +17,37 @@ from time import mktime
 from google_drive import upload_para_google_drive, upload_asset_para_drive, baixar_asset_do_drive
 from bs4 import BeautifulSoup
 
-criar_banco_de_dados()
+load_dotenv()
 app = Flask(__name__)
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+# Só tenta criar as tabelas se a URL do banco estiver configurada
+if DATABASE_URL:
+    criar_banco_de_dados()
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
 
 def get_db_connection():
-    conn = sqlite3.connect('automacao.db')
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 def marcar_como_publicado(conn, cliente_id, link_noticia):
-    conn.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (?, ?)', (cliente_id, link_noticia))
+    cur = conn.cursor()
+    cur.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (%s, %s)', (cliente_id, link_noticia))
     conn.commit()
+    cur.close()
 
 def buscar_noticias_novas(conn, cliente):
     print(f"\nBuscando notícias para: {cliente['nome_cliente']}")
-    feeds_db = conn.execute('SELECT url FROM rss_feeds WHERE cliente_id = ?', (cliente['id'],)).fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT url FROM rss_feeds WHERE cliente_id = %s', (cliente['id'],))
+    feeds_db = cur.fetchall()
     urls_feeds = [feed['url'] for feed in feeds_db]
-    posts_publicados_db = conn.execute('SELECT link_noticia FROM posts_publicados WHERE cliente_id = ?', (cliente['id'],)).fetchall()
+    cur.execute('SELECT link_noticia FROM posts_publicados WHERE cliente_id = %s', (cliente['id'],))
+    posts_publicados_db = cur.fetchall()
     links_publicados = {post['link_noticia'] for post in posts_publicados_db}
+    cur.close()
     novas_noticias = []
     for url in urls_feeds:
         try:
@@ -52,6 +64,7 @@ def buscar_noticias_novas(conn, cliente):
     novas_noticias.sort(key=lambda x: x.published_date, reverse=True)
     return novas_noticias
 
+# ... (As funções gerar_legenda, publicar_no_instagram, publicar_no_facebook, criar_imagem_post não mudam)
 def gerar_legenda(noticia, cliente):
     titulo = noticia.title.upper()
     resumo = ""
@@ -189,9 +202,13 @@ def criar_imagem_post(noticia, cliente):
 def rodar_automacao_completa():
     log_execucao = []
     conn = get_db_connection()
-    clientes_ativos = conn.execute('SELECT * FROM clientes WHERE ativo = 1').fetchall()
+    clientes_ativos_cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    clientes_ativos_cur.execute('SELECT * FROM clientes WHERE ativo = 1')
+    clientes_ativos = clientes_ativos_cur.fetchall()
+    clientes_ativos_cur.close()
     if not clientes_ativos:
         log_execucao.append("Nenhum cliente ativo encontrado.")
+        conn.close()
         return log_execucao
     for cliente in clientes_ativos:
         novas_noticias = buscar_noticias_novas(conn, cliente)
@@ -222,7 +239,10 @@ def rota_automacao():
 
 def get_cliente(cliente_id):
     conn = get_db_connection()
-    cliente = conn.execute('SELECT * FROM clientes WHERE id = ?', (cliente_id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM clientes WHERE id = %s', (cliente_id,))
+    cliente = cur.fetchone()
+    cur.close()
     conn.close()
     if cliente is None: abort(404)
     return cliente
@@ -230,13 +250,17 @@ def get_cliente(cliente_id):
 @app.route('/')
 def index():
     conn = get_db_connection()
-    clientes_db = conn.execute('SELECT * FROM clientes ORDER BY nome_cliente').fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM clientes ORDER BY nome_cliente')
+    clientes_db = cur.fetchall()
     clientes_com_feeds = []
     for cliente in clientes_db:
         cliente_dict = dict(cliente)
-        feeds = conn.execute('SELECT url FROM rss_feeds WHERE cliente_id = ?', (cliente['id'],)).fetchall()
+        cur.execute('SELECT url FROM rss_feeds WHERE cliente_id = %s', (cliente['id'],))
+        feeds = cur.fetchall()
         cliente_dict['feeds'] = feeds
         clientes_com_feeds.append(cliente_dict)
+    cur.close()
     conn.close()
     return render_template('index.html', clientes=clientes_com_feeds)
 
@@ -255,7 +279,6 @@ def adicionar():
         meta_api_token = request.form['meta_api_token']
         instagram_id = request.form['instagram_id']
         facebook_page_id = request.form['facebook_page_id']
-        
         paths = {'logo': None, 'fonte_titulo': None, 'fonte_categoria': None}
         for tipo in ['logo', 'fonte_titulo', 'fonte_categoria']:
             if tipo in request.files and request.files[tipo].filename != '':
@@ -264,17 +287,15 @@ def adicionar():
                 paths[tipo] = file_id
 
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
-        
-        novo_cliente_id = cursor.lastrowid
+        cur = conn.cursor()
+        cur.execute('''INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
+        novo_cliente_id = cur.fetchone()[0]
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
         for url in urls:
-            conn.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (?, ?)', (novo_cliente_id, url))
+            cur.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (%s, %s)', (novo_cliente_id, url))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('index'))
     return render_template('adicionar_cliente.html')
@@ -284,6 +305,7 @@ def editar(id):
     cliente = get_cliente(id)
     conn = get_db_connection()
     if request.method == 'POST':
+        cur = conn.cursor()
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
@@ -296,27 +318,27 @@ def editar(id):
         meta_api_token = request.form['meta_api_token']
         instagram_id = request.form['instagram_id']
         facebook_page_id = request.form['facebook_page_id']
-        
         paths = {'logo': cliente['logo_path'], 'fonte_titulo': cliente['fonte_titulo_path'], 'fonte_categoria': cliente['fonte_categoria_path']}
         for tipo in ['logo', 'fonte_titulo', 'fonte_categoria']:
             if tipo in request.files and request.files[tipo].filename != '':
                 arquivo = request.files[tipo]
                 file_id = upload_asset_para_drive(io.BytesIO(arquivo.read()), arquivo.filename, arquivo.mimetype)
                 paths[tipo] = file_id
-        
-        conn.execute('''UPDATE clientes SET nome_cliente = ?, ativo = ?, layout_imagem = ?, hashtags_fixas = ?, logo_path = ?, fonte_titulo_path = ?, fonte_categoria_path = ?, cor_fundo_geral = ?, cor_caixa_titulo = ?, cor_faixa_categoria = ?, cor_texto_titulo = ?, cor_texto_categoria = ?, meta_api_token = ?, instagram_id = ?, facebook_page_id = ? WHERE id = ?''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, id))
-        
-        conn.execute('DELETE FROM rss_feeds WHERE cliente_id = ?', (id,))
+        cur.execute('''UPDATE clientes SET nome_cliente = %s, ativo = %s, layout_imagem = %s, hashtags_fixas = %s, logo_path = %s, fonte_titulo_path = %s, fonte_categoria_path = %s, cor_fundo_geral = %s, cor_caixa_titulo = %s, cor_faixa_categoria = %s, cor_texto_titulo = %s, cor_texto_categoria = %s, meta_api_token = %s, instagram_id = %s, facebook_page_id = %s WHERE id = %s''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, paths['logo'], paths['fonte_titulo'], paths['fonte_categoria'], cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, id))
+        cur.execute('DELETE FROM rss_feeds WHERE cliente_id = %s', (id,))
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
         for url in urls:
-            conn.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (?, ?)', (id, url))
-        
+            cur.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (%s, %s)', (id, url))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('index'))
     
-    feeds_db = conn.execute('SELECT url FROM rss_feeds WHERE cliente_id = ?', (id,)).fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT url FROM rss_feeds WHERE cliente_id = %s', (id,))
+    feeds_db = cur.fetchall()
+    cur.close()
     conn.close()
     rss_urls_texto = "\n".join([feed['url'] for feed in feeds_db])
     return render_template('editar_cliente.html', cliente=cliente, rss_urls_texto=rss_urls_texto)
@@ -325,8 +347,10 @@ def editar(id):
 def excluir(id):
     get_cliente(id)
     conn = get_db_connection()
-    conn.execute('DELETE FROM clientes WHERE id = ?', (id,))
+    cur = conn.cursor()
+    cur.execute('DELETE FROM clientes WHERE id = %s', (id,))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for('index'))
 
