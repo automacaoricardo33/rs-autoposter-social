@@ -1,4 +1,4 @@
-# main.py (Versão com Logs de Erro Melhorados)
+# main.py (Versão Final com processamento de Fila)
 import os
 import psycopg2
 import psycopg2.extras
@@ -25,11 +25,13 @@ if DATABASE_URL:
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
+LIMITE_DE_POSTS_POR_CICLO = 3 # <-- NOSSO NOVO LIMITE DE SEGURANÇA
 
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
+# ... (todas as outras funções auxiliares como buscar_noticias_novas, criar_imagem_post, etc. permanecem exatamente as mesmas)...
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     cur = conn.cursor()
     cur.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (%s, %s)', (cliente_id, link_noticia))
@@ -54,7 +56,8 @@ def buscar_noticias_novas(conn, cliente):
                 if entry.link not in links_publicados:
                     entry.published_date = datetime.fromtimestamp(mktime(entry.published_parsed)) if hasattr(entry, 'published_parsed') else datetime.now()
                     novas_noticias.append(entry)
-        except Exception as e: print(f"⚠️ Erro ao processar o feed {url}: {e}")
+        except Exception as e:
+            print(f"⚠️ Erro ao processar o feed {url}: {e}")
     novas_noticias.sort(key=lambda x: x.published_date, reverse=True)
     return novas_noticias
 
@@ -113,14 +116,14 @@ def criar_imagem_post(noticia, cliente):
             caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
             logo = Image.open(caminho_logo).convert("RGBA")
             logo.thumbnail((200, 100)); fundo.paste(logo, (70, 70), logo)
-        except Exception as e: return (False, f"Erro no logo: {e}")
+        except Exception as e: print(f"⚠️ Erro no logo: {e}")
     if categoria and cliente['fonte_categoria_path']:
         try:
             caminho_fonte_cat = os.path.join(UPLOADS_PATH, cliente['fonte_categoria_path'])
             fonte_cat = ImageFont.truetype(caminho_fonte_cat, 40)
             if cliente['cor_faixa_categoria']: draw.rectangle([(50, 625), (IMG_WIDTH - 50, 675)], fill=cliente['cor_faixa_categoria'])
             draw.text((IMG_WIDTH / 2, 650), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or '#FFD700', anchor="mm", align="center")
-        except Exception as e: return (False, f"Erro na fonte/texto da categoria: {e}")
+        except Exception as e: print(f"⚠️ Erro na categoria: {e}")
     try:
         caminho_fonte_titulo = os.path.join(UPLOADS_PATH, cliente['fonte_titulo_path'])
         fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 70)
@@ -138,6 +141,7 @@ def criar_imagem_post(noticia, cliente):
     fundo.convert("RGB").save(buffer_saida, format='JPEG', quality=90)
     print("✅ Imagem criada!"); return (True, buffer_saida.getvalue())
 
+# FUNÇÃO PRINCIPAL DA AUTOMAÇÃO - ATUALIZADA
 def rodar_automacao_completa():
     log_execucao = []
     conn = get_db_connection()
@@ -145,36 +149,51 @@ def rodar_automacao_completa():
     cur.execute('SELECT * FROM clientes WHERE ativo = 1')
     clientes_ativos = cur.fetchall()
     cur.close()
+
     if not clientes_ativos:
         log_execucao.append("Nenhum cliente ativo encontrado.")
         conn.close()
         return log_execucao
+
     for cliente in clientes_ativos:
         novas_noticias = buscar_noticias_novas(conn, cliente)
         if not novas_noticias:
             log_execucao.append(f"Nenhuma notícia nova para {cliente['nome_cliente']}.")
             continue
-        noticia_para_postar = novas_noticias[0]
-        log_execucao.append(f"✅ Notícia encontrada para {cliente['nome_cliente']}: '{noticia_para_postar.title}'")
-        
-        # LÓGICA DE ERRO ATUALIZADA
-        sucesso_img, resultado_img = criar_imagem_post(noticia_para_postar, cliente)
-        if not sucesso_img:
-            log_execucao.append(f"❌ Falha na criação da imagem: {resultado_img}")
-            continue # Pula para o próximo cliente
-        imagem_bytes = resultado_img
-        
-        nome_arquivo = f"post_{cliente['id']}_{int(datetime.now().timestamp())}.jpg"
-        link_imagem_publica = upload_para_google_drive(imagem_bytes, nome_arquivo)
-        if not link_imagem_publica:
-            log_execucao.append("❌ Falha no upload para o Google Drive.")
-            continue
 
-        legenda = gerar_legenda(noticia_para_postar, cliente)
-        # publicar_no_instagram(link_imagem_publica, legenda, cliente)
-        # publicar_no_facebook(link_imagem_publica, legenda, cliente)
-        marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
-        log_execucao.append(f"--- Processo para {cliente['nome_cliente']} concluído com SUCESSO. ---")
+        # NOVA LÓGICA: FAZ UM LOOP PELAS NOTÍCIAS NOVAS, RESPEITANDO O LIMITE
+        log_execucao.append(f"Encontradas {len(novas_noticias)} notícias novas para {cliente['nome_cliente']}. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
+        
+        posts_neste_ciclo = 0
+        for noticia_para_postar in novas_noticias:
+            if posts_neste_ciclo >= LIMITE_DE_POSTS_POR_CICLO:
+                log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts por ciclo atingido. Mais notícias serão processadas na próxima execução.")
+                break
+
+            log_execucao.append(f"✅ Processando: '{noticia_para_postar.title}'")
+            
+            sucesso_img, resultado_img = criar_imagem_post(noticia_para_postar, cliente)
+            if not sucesso_img:
+                log_execucao.append(f"❌ Falha na criação da imagem: {resultado_img}")
+                continue
+            imagem_bytes = resultado_img
+            
+            nome_arquivo = f"post_{cliente['id']}_{int(datetime.now().timestamp())}.jpg"
+            link_imagem_publica = upload_para_google_drive(imagem_bytes, nome_arquivo)
+            if not link_imagem_publica:
+                log_execucao.append("❌ Falha no upload para o Google Drive.")
+                continue
+
+            legenda = gerar_legenda(noticia_para_postar, cliente)
+            
+            # ATIVE AS LINHAS ABAIXO QUANDO OS TOKENS ESTIVEREM CORRETOS
+            # publicar_no_instagram(link_imagem_publica, legenda, cliente)
+            # publicar_no_facebook(link_imagem_publica, legenda, cliente)
+            
+            marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
+            log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído com SUCESSO. ---")
+            posts_neste_ciclo += 1
+
     conn.close()
     return log_execucao
 
@@ -227,7 +246,6 @@ def index():
 @app.route('/adicionar', methods=('GET', 'POST'))
 def adicionar():
     if request.method == 'POST':
-        # (Lógica de adicionar completa, sem alterações)
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
@@ -258,7 +276,6 @@ def adicionar():
         cur.close()
         conn.close()
         return redirect(url_for('index'))
-
     imagens, fontes = get_available_assets()
     return render_template('adicionar_cliente.html', imagens=imagens, fontes=fontes)
 
@@ -266,7 +283,6 @@ def adicionar():
 def editar(id):
     cliente = get_cliente(id)
     if request.method == 'POST':
-        # (Lógica de editar completa, sem alterações)
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
@@ -301,7 +317,6 @@ def editar(id):
         cur.close()
         conn.close()
         return redirect(url_for('index'))
-
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT url FROM rss_feeds WHERE cliente_id = %s', (id,))
