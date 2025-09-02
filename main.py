@@ -113,7 +113,7 @@ def criar_imagem_post(noticia, cliente):
         if cliente['fonte_categoria_path']:
             try:
                 caminho_fonte_cat = os.path.join(UPLOADS_PATH, cliente['fonte_categoria_path'])
-                fonte_cat = ImageFont.truetype(caminho_fonte_cat, 50)
+                fonte_cat = ImageFont.truetype(caminho_fonte_cat, 60) # <-- AJUSTADO
                 draw.text((540, 700), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or "#FFFFFF", anchor="mm", align="center")
             except Exception as e: print(f"⚠️ Erro fonte categoria: {e}")
         draw.rectangle([(0, 750), (1080, 980)], fill=cor_rodape)
@@ -136,16 +136,16 @@ def criar_imagem_post(noticia, cliente):
             except Exception as e: print(f"⚠️ Erro no logo: {e}")
     try:
         caminho_fonte_titulo = os.path.join(UPLOADS_PATH, cliente['fonte_titulo_path'])
-        fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 75)
+        fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 50) # <-- AJUSTADO
         cor_texto_titulo = cliente['cor_texto_titulo'] or '#FFFFFF'
-        linhas_texto = textwrap.wrap(titulo, width=28)
+        linhas_texto = textwrap.wrap(titulo, width=35) # Aumentado para o novo tamanho
         texto_junto = "\n".join(linhas_texto)
         draw.text((540, 865), texto_junto, font=fonte_titulo, fill=cor_texto_titulo, anchor="mm", align="center")
     except Exception as e: return (False, f"Erro na fonte/texto do título: {e}")
     if cliente['handle_social']:
         try:
             texto_cta = f"@{cliente['handle_social'].upper()}"
-            fonte_cta = ImageFont.truetype("Anton-Regular.ttf", 45)
+            fonte_cta = ImageFont.truetype("Anton-Regular.ttf", 45) # <-- AJUSTADO
             cor_cta = '#000000' if cor_rodape.lower() == '#ffffff' else '#FFFFFF'
             draw.text((540, 1030), texto_cta, font=fonte_cta, fill=cor_cta, anchor="ms", align="center")
         except Exception as e: print(f"⚠️ Erro no handle social: {e}")
@@ -212,12 +212,11 @@ def rodar_automacao_completa():
         if not novas_noticias:
             log_execucao.append(f"Nenhuma notícia nova para {cliente['nome_cliente']}.")
             continue
-        log_execucao.append(f"Encontradas {len(novas_noticias)} notícias novas. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
+        log_execucao.append(f"Encontradas {len(novas_noticias)} notícias. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
         posts_neste_ciclo = 0
         for noticia_para_postar in novas_noticias:
             if posts_neste_ciclo >= LIMITE_DE_POSTS_POR_CICLO:
-                log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts atingido.")
-                break
+                log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts atingido."); break
             log_execucao.append(f"✅ Processando: '{noticia_para_postar.title}'")
             sucesso_img, resultado_img = criar_imagem_post(noticia_para_postar, cliente)
             if not sucesso_img:
