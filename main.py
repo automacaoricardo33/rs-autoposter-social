@@ -1,4 +1,4 @@
-# main.py (Versão Final com processamento de Fila)
+# main.py (Versão Final com User-Agent)
 import os
 import psycopg2
 import psycopg2.extras
@@ -25,19 +25,19 @@ if DATABASE_URL:
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
-LIMITE_DE_POSTS_POR_CICLO = 3 # <-- NOSSO NOVO LIMITE DE SEGURANÇA
+LIMITE_DE_POSTS_POR_CICLO = 3
 
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
-# ... (todas as outras funções auxiliares como buscar_noticias_novas, criar_imagem_post, etc. permanecem exatamente as mesmas)...
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     cur = conn.cursor()
     cur.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (%s, %s)', (cliente_id, link_noticia))
     conn.commit()
     cur.close()
 
+# FUNÇÃO ATUALIZADA
 def buscar_noticias_novas(conn, cliente):
     print(f"\nBuscando notícias para: {cliente['nome_cliente']}")
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -48,19 +48,31 @@ def buscar_noticias_novas(conn, cliente):
     posts_publicados_db = cur.fetchall()
     links_publicados = {post['link_noticia'] for post in posts_publicados_db}
     cur.close()
+    
     novas_noticias = []
+    # ADICIONADO: Define um "disfarce" de navegador
+    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
+    
     for url in urls_feeds:
         try:
-            feed = feedparser.parse(url)
+            # ADICIONADO: Usa o "disfarce" ao ler o feed
+            feed = feedparser.parse(url, agent=user_agent)
+            
+            # Adiciona uma verificação para feeds com erro
+            if feed.bozo:
+                print(f"⚠️ Aviso: O feed {url} pode estar mal formatado ou retornou um erro. Bozo exception: {feed.bozo_exception}")
+
             for entry in feed.entries:
                 if entry.link not in links_publicados:
                     entry.published_date = datetime.fromtimestamp(mktime(entry.published_parsed)) if hasattr(entry, 'published_parsed') else datetime.now()
                     novas_noticias.append(entry)
         except Exception as e:
             print(f"⚠️ Erro ao processar o feed {url}: {e}")
+            
     novas_noticias.sort(key=lambda x: x.published_date, reverse=True)
     return novas_noticias
 
+# ... (O RESTANTE DO ARQUIVO CONTINUA EXATAMENTE IGUAL)
 def gerar_legenda(noticia, cliente):
     titulo = noticia.title.upper()
     resumo = ""
@@ -141,7 +153,6 @@ def criar_imagem_post(noticia, cliente):
     fundo.convert("RGB").save(buffer_saida, format='JPEG', quality=90)
     print("✅ Imagem criada!"); return (True, buffer_saida.getvalue())
 
-# FUNÇÃO PRINCIPAL DA AUTOMAÇÃO - ATUALIZADA
 def rodar_automacao_completa():
     log_execucao = []
     conn = get_db_connection()
@@ -160,14 +171,13 @@ def rodar_automacao_completa():
         if not novas_noticias:
             log_execucao.append(f"Nenhuma notícia nova para {cliente['nome_cliente']}.")
             continue
-
-        # NOVA LÓGICA: FAZ UM LOOP PELAS NOTÍCIAS NOVAS, RESPEITANDO O LIMITE
+        
         log_execucao.append(f"Encontradas {len(novas_noticias)} notícias novas para {cliente['nome_cliente']}. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
         
         posts_neste_ciclo = 0
         for noticia_para_postar in novas_noticias:
             if posts_neste_ciclo >= LIMITE_DE_POSTS_POR_CICLO:
-                log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts por ciclo atingido. Mais notícias serão processadas na próxima execução.")
+                log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts por ciclo atingido.")
                 break
 
             log_execucao.append(f"✅ Processando: '{noticia_para_postar.title}'")
@@ -185,19 +195,15 @@ def rodar_automacao_completa():
                 continue
 
             legenda = gerar_legenda(noticia_para_postar, cliente)
-            
-            # ATIVE AS LINHAS ABAIXO QUANDO OS TOKENS ESTIVEREM CORRETOS
             # publicar_no_instagram(link_imagem_publica, legenda, cliente)
             # publicar_no_facebook(link_imagem_publica, legenda, cliente)
             
             marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
             log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído com SUCESSO. ---")
             posts_neste_ciclo += 1
-
     conn.close()
     return log_execucao
 
-# --- ROTAS E LÓGICA DO PAINEL (sem alterações) ---
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
     print("🚀 Disparando automação via rota secreta...")
