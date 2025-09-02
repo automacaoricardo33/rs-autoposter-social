@@ -1,94 +1,21 @@
 {% extends "base.html" %}
-
-{% block title %}
-Adicionar Novo Cliente
-{% endblock %}
-
 {% block content %}
   <h1>Adicionar Novo Cliente</h1>
   <hr>
-
-  <form method="post" style="display: flex; flex-direction: column; gap: 20px;">
+  <form method="post" enctype="multipart/form-data">
+    <fieldset> ... </fieldset>
     
-    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Informações Gerais</legend>
-        <label for="nome_cliente">Nome do Cliente:</label>
-        <input type="text" name="nome_cliente" id="nome_cliente" required style="width: 98%; padding: 8px;">
-        <br><br>
-        <label for="rss_urls">URLs dos Feeds RSS (uma por linha):</label>
-        <textarea name="rss_urls" id="rss_urls" required rows="5" style="width: 98%; padding: 8px;"></textarea>
-        <br><br>
-        <label><input type="checkbox" name="ativo" checked> Automação Ativa</label>
-    </fieldset>
+    <fieldset>
+      <legend>Design e Layout</legend>
+      <label for="logo">Logo:</label>
+      <input type="file" name="logo" id="logo">
+      <br><br>
+      <label for="fonte_titulo">Fonte do Título:</label>
+      <input type="file" name="fonte_titulo" id="fonte_titulo">
+      <br><br>
+      <label for="fonte_categoria">Fonte da Categoria (Opcional):</label>
+      <input type="file" name="fonte_categoria" id="fonte_categoria">
+      </fieldset>
 
-    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Design e Layout</legend>
-        
-        <label for="logo_path">Logo:</label>
-        <select name="logo_path" id="logo_path" style="width: 100%; padding: 8px;">
-            <option value="">-- Nenhum --</option>
-            {% for imagem in imagens %}
-                <option value="{{ imagem }}">{{ imagem }}</option>
-            {% endfor %}
-        </select>
-        <br><br>
-        
-        <label>Layout da Imagem:</label>
-        <label><input type="radio" name="layout_imagem" value="padrão" checked> Padrão (Retângulo)</label>
-        <label><input type="radio" name="layout_imagem" value="fundo_completo"> Fundo Completo</label>
-        <br><br>
-        
-        <h4>Cores (Opcional)</h4>
-        <label for="cor_fundo_geral">Fundo Geral:</label>
-        <input type="color" name="cor_fundo_geral" id="cor_fundo_geral" value="#051d40">
-        <label for="cor_caixa_titulo">Fundo Caixa Título:</label>
-        <input type="color" name="cor_caixa_titulo" id="cor_caixa_titulo">
-        <label for="cor_faixa_categoria">Fundo Faixa Categoria:</label>
-        <input type="color" name="cor_faixa_categoria" id="cor_faixa_categoria">
-        
-        <h4>Textos e Fontes</h4>
-        <label for="cor_texto_titulo">Cor do Título:</label>
-        <input type="color" name="cor_texto_titulo" id="cor_texto_titulo" value="#FFFFFF">
-        <label for="fonte_titulo_path">Fonte do Título:</label>
-        <select name="fonte_titulo_path" id="fonte_titulo_path" style="width: 100%; padding: 8px;">
-            <option value="">-- Nenhuma --</option>
-            {% for fonte in fontes %}
-                <option value="{{ fonte }}">{{ fonte }}</option>
-            {% endfor %}
-        </select>
-        <br><br>
-        <label for="cor_texto_categoria">Cor da Categoria:</label>
-        <input type="color" name="cor_texto_categoria" id="cor_texto_categoria" value="#FFD700">
-        <label for="fonte_categoria_path">Fonte da Categoria:</label>
-        <select name="fonte_categoria_path" id="fonte_categoria_path" style="width: 100%; padding: 8px;">
-            <option value="">-- Nenhuma --</option>
-            {% for fonte in fontes %}
-                <option value="{{ fonte }}">{{ fonte }}</option>
-            {% endfor %}
-        </select>
-    </fieldset>
-
-    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Hashtags</legend>
-        <label for="hashtags_fixas">Hashtags Fixas (separe com espaço, não inclua o #):</label>
-        <textarea name="hashtags_fixas" id="hashtags_fixas" rows="3" style="width: 98%;"></textarea>
-    </fieldset>
-
-    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Credenciais (Tokens)</legend>
-        <label for="meta_api_token">Token da API da Meta:</label>
-        <textarea name="meta_api_token" id="meta_api_token" rows="3" style="width: 98%;"></textarea>
-        <br><br>
-        <label for="instagram_id">ID da Conta do Instagram:</label>
-        <input type="text" name="instagram_id" id="instagram_id" style="width: 98%; padding: 8px;">
-        <br><br>
-        <label for="facebook_page_id">ID da Página do Facebook:</label>
-        <input type="text" name="facebook_page_id" id="facebook_page_id" style="width: 98%; padding: 8px;">
-    </fieldset>
-
-    <div style="text-align: right;">
-      <a href="/" style="margin-right: 15px;">Cancelar</a>
-      <button type="submit" style="background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer;">Salvar Cliente</button>
-    </div>
-  </form>
+    </form>
 {% endblock %}
