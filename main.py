@@ -121,7 +121,10 @@ def criar_imagem_post(noticia, cliente):
             try:
                 caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
                 logo = Image.open(caminho_logo).convert("RGBA")
-                logo.thumbnail((250, 150)); fundo.paste(logo, (40, 40), logo)
+                logo_original_w, logo_original_h = logo.size
+                novo_tamanho = (int(logo_original_w * 0.85), int(logo_original_h * 0.85))
+                logo.thumbnail(novo_tamanho)
+                fundo.paste(logo, (40, 40), logo) # Logo sobe
             except Exception as e: print(f"⚠️ Erro no logo: {e}")
     else:
         draw.rectangle([(0, 680), (1080, 1080)], fill=cor_rodape)
@@ -129,7 +132,9 @@ def criar_imagem_post(noticia, cliente):
             try:
                 caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
                 logo = Image.open(caminho_logo).convert("RGBA")
-                logo.thumbnail((300, 300))
+                logo_original_w, logo_original_h = logo.size
+                novo_tamanho = (int(logo_original_w * 0.85), int(logo_original_h * 0.85))
+                logo.thumbnail(novo_tamanho)
                 pos_x_logo = (IMG_WIDTH - logo.width) // 2
                 pos_y_logo = 680 - (logo.height // 2)
                 fundo.paste(logo, (pos_x_logo, pos_y_logo), logo)
@@ -138,7 +143,7 @@ def criar_imagem_post(noticia, cliente):
         caminho_fonte_titulo = os.path.join(UPLOADS_PATH, cliente['fonte_titulo_path'])
         fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 50) # <-- AJUSTADO
         cor_texto_titulo = cliente['cor_texto_titulo'] or '#FFFFFF'
-        linhas_texto = textwrap.wrap(titulo, width=35) # Aumentado para o novo tamanho
+        linhas_texto = textwrap.wrap(titulo, width=35)
         texto_junto = "\n".join(linhas_texto)
         draw.text((540, 865), texto_junto, font=fonte_titulo, fill=cor_texto_titulo, anchor="mm", align="center")
     except Exception as e: return (False, f"Erro na fonte/texto do título: {e}")
