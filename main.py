@@ -158,9 +158,9 @@ def criar_imagem_post(noticia, cliente):
     fundo.save(buffer_saida, format='JPEG', quality=90)
     print("✅ Imagem com novo design criada!"); return (True, buffer_saida.getvalue())
 
-def publicar_nas_redes(imagem_bytes, legenda, cliente):
-    print("✅ [SIMULAÇÃO] Publicando no Instagram e Facebook...")
-    print(f"Legenda: {legenda[:100]}...")
+def publicar_no_instagram_direto(imagem_bytes, legenda, cliente)
+            publicar_no_facebook_direto(imagem_bytes, legenda, cliente)            
+            marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
     return True
 
 def rodar_automacao_completa():
@@ -342,3 +342,4 @@ def excluir(id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
+
