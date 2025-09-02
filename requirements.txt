@@ -5,6 +5,5 @@ python-dotenv
 requests
 beautifulsoup4
 feedparser
-google-api-python-client
-google-auth-oauthlib
 psycopg2-binary
+facebook-business
