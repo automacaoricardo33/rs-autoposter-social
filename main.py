@@ -1,4 +1,4 @@
-# main.py (Versão Final Otimizada para o Render)
+# main.py (Versão FINAL DE PRODUÇÃO)
 import os
 import psycopg2
 import psycopg2.extras
@@ -14,8 +14,7 @@ from datetime import datetime
 from time import mktime
 from bs4 import BeautifulSoup
 
-# REMOVIDO: Não precisamos mais do Google Drive nem do facebook-business
-# from google_drive import upload_para_google_drive
+# --- REMOVIDO: Simplificação final ---
 # from facebook_business.api import FacebookAdsApi
 # from facebook_business.adobjects.pagepost import PagePost
 
@@ -29,14 +28,13 @@ if DATABASE_URL:
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
-# AJUSTE DE PERFORMANCE: Reduzido para 1 para garantir que termine a tempo
-LIMITE_DE_POSTS_POR_CICLO = 1
+LIMITE_DE_POSTS_POR_CICLO = 2 # Mantemos um limite baixo para não dar timeout
 
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
-# (O resto do código até 'rodar_automacao_completa' permanece o mesmo...)
+# (Funções buscar_noticias_novas, gerar_legenda, criar_imagem_post permanecem as mesmas)
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     cur = conn.cursor()
     cur.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (%s, %s)', (cliente_id, link_noticia))
@@ -85,7 +83,7 @@ def gerar_legenda(noticia, cliente):
     return f"{titulo}\n\n{resumo}\n\nLeia a matéria completa em nosso site.\n\n{fonte}\n\n{' '.join(hashtags)}"
 
 def criar_imagem_post(noticia, cliente):
-    # (A função criar_imagem_post não muda e continua aqui)
+    #... (código idêntico ao anterior)
     print("🎨 Criando imagem do post...")
     titulo = noticia.title.upper()
     categoria = (noticia.tags[0].term if hasattr(noticia, 'tags') and noticia.tags else "").upper()
@@ -125,14 +123,14 @@ def criar_imagem_post(noticia, cliente):
             caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
             logo = Image.open(caminho_logo).convert("RGBA")
             logo.thumbnail((200, 100)); fundo.paste(logo, (70, 70), logo)
-        except Exception as e: print(f"⚠️ Erro no logo: {e}")
+        except Exception as e: return (False, f"Erro no logo: {e}")
     if categoria and cliente['fonte_categoria_path']:
         try:
             caminho_fonte_cat = os.path.join(UPLOADS_PATH, cliente['fonte_categoria_path'])
             fonte_cat = ImageFont.truetype(caminho_fonte_cat, 40)
             if cliente['cor_faixa_categoria']: draw.rectangle([(50, 625), (IMG_WIDTH - 50, 675)], fill=cliente['cor_faixa_categoria'])
             draw.text((IMG_WIDTH / 2, 650), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or '#FFD700', anchor="mm", align="center")
-        except Exception as e: print(f"⚠️ Erro na categoria: {e}")
+        except Exception as e: return (False, f"Erro na fonte/texto da categoria: {e}")
     try:
         caminho_fonte_titulo = os.path.join(UPLOADS_PATH, cliente['fonte_titulo_path'])
         fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 70)
@@ -149,16 +147,59 @@ def criar_imagem_post(noticia, cliente):
     buffer_saida = io.BytesIO()
     fundo.convert("RGB").save(buffer_saida, format='JPEG', quality=90)
     print("✅ Imagem criada!"); return (True, buffer_saida.getvalue())
-
-# Funções de publicação foram simplificadas para usar um método mais robusto e leve
+    
 def publicar_nas_redes(imagem_bytes, legenda, cliente):
-    # Por enquanto, vamos apenas simular a publicação para evitar timeouts
-    # Quando o resto estiver 100%, reativamos a publicação real
-    print("✅ [SIMULAÇÃO] Publicando no Instagram e Facebook...")
-    print(f"Legenda: {legenda[:100]}...") # Mostra os primeiros 100 caracteres da legenda
-    return True
+    print("📤 Iniciando publicação...")
+    token = cliente['meta_api_token']
+    insta_id = cliente['instagram_id']
+    page_id = cliente['facebook_page_id']
+    
+    # Publica no Instagram (usa um upload temporário no Facebook para obter a URL)
+    if all([token, insta_id, page_id]):
+        try:
+            print("--- Publicando no Instagram ---")
+            upload_url = f"https://graph.facebook.com/{page_id}/photos"
+            files = {'source': ('post.jpg', io.BytesIO(imagem_bytes), 'image/jpeg')}
+            params = {'published': 'false', 'access_token': token}
+            r_upload = requests.post(upload_url, files=files, params=params); r_upload.raise_for_status()
+            photo_id = r_upload.json()['id']
+            
+            photo_info_url = f"https://graph.facebook.com/{photo_id}?fields=images&access_token={token}"
+            r_photo_info = requests.get(photo_info_url); r_photo_info.raise_for_status()
+            image_url = r_photo_info.json()['images'][0]['source']
+            
+            url_container = f"https://graph.facebook.com/v19.0/{insta_id}/media"
+            params_container = {'image_url': image_url, 'caption': legenda, 'access_token': token}
+            r_container = requests.post(url_container, params=params_container); r_container.raise_for_status()
+            id_criacao = r_container.json()['id']
+            
+            # Espera a imagem ser processada pelo Instagram
+            for _ in range(10):
+                status_url = f"https://graph.facebook.com/{id_criacao}?fields=status_code&access_token={token}"
+                r_status = requests.get(status_url).json()
+                if r_status.get('status_code') == 'FINISHED':
+                    break
+                time.sleep(3)
 
-# --- LÓGICA PRINCIPAL DA AUTOMAÇÃO ---
+            url_publicacao = f"https://graph.facebook.com/v19.0/{insta_id}/media_publish"
+            params_publicacao = {'creation_id': id_criacao, 'access_token': token}
+            r_publish = requests.post(url_publicacao, params=params_publicacao); r_publish.raise_for_status()
+            print("✅ Post publicado no Instagram!")
+        except Exception as e:
+            print(f"❌ Erro ao publicar no Instagram: {e}")
+
+    # Publica no Facebook
+    if all([token, page_id]):
+        try:
+            print("--- Publicando no Facebook ---")
+            url_post_foto = f"https://graph.facebook.com/{page_id}/photos"
+            files = {'source': ('post.jpg', io.BytesIO(imagem_bytes), 'image/jpeg')}
+            params = {'message': legenda, 'access_token': token}
+            requests.post(url_post_foto, files=files, params=params).raise_for_status()
+            print("✅ Post publicado no Facebook!")
+        except Exception as e:
+            print(f"❌ Erro ao publicar no Facebook: {e}")
+
 def rodar_automacao_completa():
     log_execucao = []
     conn = get_db_connection()
@@ -179,7 +220,6 @@ def rodar_automacao_completa():
             continue
         
         log_execucao.append(f"Encontradas {len(novas_noticias)} notícias novas. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
-        
         posts_neste_ciclo = 0
         for noticia_para_postar in novas_noticias:
             if posts_neste_ciclo >= LIMITE_DE_POSTS_POR_CICLO:
@@ -195,24 +235,23 @@ def rodar_automacao_completa():
             
             legenda = gerar_legenda(noticia_para_postar, cliente)
             
+            # AGORA CHAMA A FUNÇÃO DE PUBLICAÇÃO REAL
             publicar_nas_redes(imagem_bytes, legenda, cliente)
             
             marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
-            log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído (em modo simulação). ---")
+            log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído. ---")
             posts_neste_ciclo += 1
     conn.close()
     return log_execucao
 
-
-# --- ROTAS E LÓGICA DO PAINEL ---
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
     print("🚀 Disparando automação via rota secreta...")
     logs = rodar_automacao_completa()
     print("🏁 Automação finalizada.")
-    return jsonify(logs)
+    return jsonify({"status": "sucesso", "total_de_acoes": len(logs)})
 
-# ... (O restante das rotas do painel, como get_cliente, index, adicionar, editar, excluir, continuam aqui, sem alterações)...
+# ... (O restante do código do painel CRUD continua aqui, sem nenhuma alteração)
 def get_cliente(cliente_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
