@@ -23,7 +23,6 @@ def criar_banco_de_dados():
             logo_path TEXT,
             fonte_titulo_path TEXT,
             fonte_categoria_path TEXT,
-            layout_imagem TEXT DEFAULT 'padrão',
             cor_fundo_geral TEXT,
             cor_faixa_categoria TEXT,
             cor_caixa_titulo TEXT,
