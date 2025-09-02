@@ -4,7 +4,6 @@ import psycopg2
 import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 from dotenv import load_dotenv
-
 from database import criar_banco_de_dados
 import feedparser
 import requests
@@ -19,12 +18,11 @@ from bs4 import BeautifulSoup
 load_dotenv()
 app = Flask(__name__)
 DATABASE_URL = os.getenv('DATABASE_URL')
-UPLOADS_PATH = os.path.join('static', 'uploads') # Caminho para os assets locais
+UPLOADS_PATH = os.path.join('static', 'uploads')
 
 if DATABASE_URL:
     criar_banco_de_dados()
 
-# (As funções de automação, como criar_imagem_post, etc., continuam as mesmas da versão anterior)
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
 
@@ -32,6 +30,7 @@ def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
+# (Funções de automação como buscar_noticias_novas, gerar_legenda, etc. - Sem alterações)
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     cur = conn.cursor()
     cur.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (%s, %s)', (cliente_id, link_noticia))
@@ -149,7 +148,6 @@ def criar_imagem_post(noticia, cliente):
     except Exception as e:
         print(f"❌ Erro no título: {e}"); return None
     try:
-        # Tenta usar a fonte local como fallback para a assinatura
         fonte_assinatura = ImageFont.truetype("Raleway-VariableFont_wght.ttf", 20)
         draw.text((IMG_WIDTH / 2, IMG_HEIGHT - 15), ASSINATURA, font=fonte_assinatura, fill=(200, 200, 200, 255), anchor="ms", align="center")
     except Exception: pass
@@ -182,8 +180,8 @@ def rodar_automacao_completa():
         link_imagem_publica = upload_para_google_drive(imagem_bytes, nome_arquivo)
         if not link_imagem_publica: continue
         legenda = gerar_legenda(noticia_para_postar, cliente)
-        publicar_no_instagram(link_imagem_publica, legenda, cliente)
-        publicar_no_facebook(link_imagem_publica, legenda, cliente)
+        # publicar_no_instagram(link_imagem_publica, legenda, cliente)
+        # publicar_no_facebook(link_imagem_publica, legenda, cliente)
         marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
         log_execucao.append(f"--- Processo para {cliente['nome_cliente']} concluído. ---")
     conn.close()
@@ -239,23 +237,30 @@ def index():
 def adicionar():
     if request.method == 'POST':
         # Pega os nomes dos arquivos dos menus de seleção
-        logo_path = request.form['logo_path']
-        fonte_titulo_path = request.form['fonte_titulo_path']
-        fonte_categoria_path = request.form['fonte_categoria_path']
+        logo_path = request.form.get('logo_path')
+        fonte_titulo_path = request.form.get('fonte_titulo_path')
+        fonte_categoria_path = request.form.get('fonte_categoria_path')
         
         # Pega o resto dos dados
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
         hashtags_fixas = request.form['hashtags_fixas']
-        # ... (e as cores, tokens, etc.)
-        
+        cor_fundo_geral = request.form['cor_fundo_geral']
+        cor_caixa_titulo = request.form['cor_caixa_titulo']
+        cor_faixa_categoria = request.form['cor_faixa_categoria']
+        cor_texto_titulo = request.form['cor_texto_titulo']
+        cor_texto_categoria = request.form['cor_texto_categoria']
+        meta_api_token = request.form['meta_api_token']
+        instagram_id = request.form['instagram_id']
+        facebook_page_id = request.form['facebook_page_id']
+
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
-            INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, ...) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, ...) RETURNING id
-        ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, ...))
+            INSERT INTO clientes (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
         novo_cliente_id = cur.fetchone()[0]
         
         rss_urls_texto = request.form['rss_urls']
@@ -276,25 +281,34 @@ def editar(id):
     cliente = get_cliente(id)
     if request.method == 'POST':
         # Pega os nomes dos arquivos dos menus de seleção
-        logo_path = request.form['logo_path']
-        fonte_titulo_path = request.form['fonte_titulo_path']
-        fonte_categoria_path = request.form['fonte_categoria_path']
+        logo_path = request.form.get('logo_path')
+        fonte_titulo_path = request.form.get('fonte_titulo_path')
+        fonte_categoria_path = request.form.get('fonte_categoria_path')
         
         # Pega o resto dos dados
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
         hashtags_fixas = request.form['hashtags_fixas']
-        # ... (e as cores, tokens, etc.)
+        cor_fundo_geral = request.form['cor_fundo_geral']
+        cor_caixa_titulo = request.form['cor_caixa_titulo']
+        cor_faixa_categoria = request.form['cor_faixa_categoria']
+        cor_texto_titulo = request.form['cor_texto_titulo']
+        cor_texto_categoria = request.form['cor_texto_categoria']
+        meta_api_token = request.form['meta_api_token']
+        instagram_id = request.form['instagram_id']
+        facebook_page_id = request.form['facebook_page_id']
         
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
             UPDATE clientes SET 
                 nome_cliente = %s, ativo = %s, layout_imagem = %s, hashtags_fixas = %s, logo_path = %s,
-                fonte_titulo_path = %s, fonte_categoria_path = %s, ...
+                fonte_titulo_path = %s, fonte_categoria_path = %s, cor_fundo_geral = %s, cor_caixa_titulo = %s, 
+                cor_faixa_categoria = %s, cor_texto_titulo = %s, cor_texto_categoria = %s, meta_api_token = %s, 
+                instagram_id = %s, facebook_page_id = %s
             WHERE id = %s
-        ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, ..., id))
+        ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, id))
         
         cur.execute('DELETE FROM rss_feeds WHERE cliente_id = %s', (id,))
         rss_urls_texto = request.form['rss_urls']
@@ -320,7 +334,7 @@ def editar(id):
 
 @app.route('/excluir/<int:id>', methods=('POST', 'GET'))
 def excluir(id):
-    get_cliente(id) # Garante que existe
+    get_cliente(id)
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute('DELETE FROM clientes WHERE id = %s', (id,))
