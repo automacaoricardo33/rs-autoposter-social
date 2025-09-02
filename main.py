@@ -170,35 +170,45 @@ def rodar_automacao_completa():
     cur.execute('SELECT * FROM clientes WHERE ativo = 1')
     clientes_ativos = cur.fetchall()
     cur.close()
+
     if not clientes_ativos:
         log_execucao.append("Nenhum cliente ativo encontrado.")
         conn.close()
         return log_execucao
+
     for cliente in clientes_ativos:
         novas_noticias = buscar_noticias_novas(conn, cliente)
         if not novas_noticias:
             log_execucao.append(f"Nenhuma notícia nova para {cliente['nome_cliente']}.")
             continue
+        
         log_execucao.append(f"Encontradas {len(novas_noticias)} notícias novas. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
+        
         posts_neste_ciclo = 0
         for noticia_para_postar in novas_noticias:
             if posts_neste_ciclo >= LIMITE_DE_POSTS_POR_CICLO:
                 log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts atingido.")
                 break
+
             log_execucao.append(f"✅ Processando: '{noticia_para_postar.title}'")
+            
             sucesso_img, resultado_img = criar_imagem_post(noticia_para_postar, cliente)
             if not sucesso_img:
                 log_execucao.append(f"❌ Falha na imagem: {resultado_img}"); continue
             imagem_bytes = resultado_img
+            
             legenda = gerar_legenda(noticia_para_postar, cliente)
-            publicar_nas_redes(imagem_bytes, legenda, cliente)
+            
+            # ############# ATIVAÇÃO DA PUBLICAÇÃO REAL #############
+            publicar_no_instagram_direto(imagem_bytes, legenda, cliente)
+            publicar_no_facebook_direto(imagem_bytes, legenda, cliente)
+            # #######################################################
+            
             marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
-            log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído (em modo simulação). ---")
+            log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído. ---")
             posts_neste_ciclo += 1
     conn.close()
     return log_execucao
-
-@app.route('/rodar-automacao-agora')
 def rota_automacao():
     print("🚀 Disparando automação via rota secreta...")
     logs = rodar_automacao_completa()
