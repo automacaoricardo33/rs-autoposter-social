@@ -6,4 +6,5 @@ requests
 beautifulsoup4
 feedparser
 psycopg2-binary
+cloudinary
 facebook-business
