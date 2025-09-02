@@ -27,22 +27,21 @@
         </select>
         <br><br>
         
-        <label>Layout da Imagem:</label>
-        <label><input type="radio" name="layout_imagem" value="padrão" {% if cliente.layout_imagem == 'padrão' %}checked{% endif %}> Padrão</label>
-        <label><input type="radio" name="layout_imagem" value="fundo_completo" {% if cliente.layout_imagem == 'fundo_completo' %}checked{% endif %}> Fundo Completo</label>
+        <label for="texto_categoria_fixo">Texto Fixo da Categoria (Ex: NOTÍCIA, URGENTE):</label>
+        <input type="text" name="texto_categoria_fixo" id="texto_categoria_fixo" value="{{ cliente.texto_categoria_fixo or '' }}" style="width: 98%; padding: 8px;">
         <br><br>
-        
+
         <h4>Cores (Opcional)</h4>
         <label for="cor_fundo_geral">Fundo Geral:</label>
-        <input type="color" name="cor_fundo_geral" id="cor_fundo_geral" value="{{ cliente.cor_fundo_geral or '#051d40' }}">
-        <label for="cor_caixa_titulo">Fundo Caixa Título:</label>
+        <input type="color" name="cor_fundo_geral" id="cor_fundo_geral" value="{{ cliente.cor_fundo_geral or '#000000' }}">
+        <label for="cor_caixa_titulo">Fundo Caixa/Rodapé Título:</label>
         <input type="color" name="cor_caixa_titulo" id="cor_caixa_titulo" value="{{ cliente.cor_caixa_titulo or '' }}">
         <label for="cor_faixa_categoria">Fundo Faixa Categoria:</label>
         <input type="color" name="cor_faixa_categoria" id="cor_faixa_categoria" value="{{ cliente.cor_faixa_categoria or '' }}">
         
         <h4>Textos e Fontes</h4>
         <label for="cor_texto_titulo">Cor do Título:</label>
-        <input type="color" name="cor_texto_titulo" id="cor_texto_titulo" value="{{ cliente.cor_texto_titulo or '#FFFFFF' }}">
+        <input type="color" name="cor_texto_titulo" id="cor_texto_titulo" value="{{ cliente.cor_texto_titulo or '#000000' }}">
         <label for="fonte_titulo_path">Fonte do Título:</label>
         <select name="fonte_titulo_path" id="fonte_titulo_path" style="width: 100%; padding: 8px;">
             <option value="">-- Nenhuma --</option>
@@ -52,7 +51,7 @@
         </select>
         <br><br>
         <label for="cor_texto_categoria">Cor da Categoria:</label>
-        <input type="color" name="cor_texto_categoria" id="cor_texto_categoria" value="{{ cliente.cor_texto_categoria or '#FFD700' }}">
+        <input type="color" name="cor_texto_categoria" id="cor_texto_categoria" value="{{ cliente.cor_texto_categoria or '#FFFFFF' }}">
         <label for="fonte_categoria_path">Fonte da Categoria:</label>
         <select name="fonte_categoria_path" id="fonte_categoria_path" style="width: 100%; padding: 8px;">
             <option value="">-- Nenhuma --</option>
@@ -63,9 +62,12 @@
     </fieldset>
 
     <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Hashtags</legend>
+        <legend style="font-weight: bold; padding: 0 10px;">Conteúdo Final</legend>
         <label for="hashtags_fixas">Hashtags Fixas (separe com espaço, não inclua o #):</label>
         <textarea name="hashtags_fixas" id="hashtags_fixas" rows="3" style="width: 98%;">{{ cliente.hashtags_fixas or '' }}</textarea>
+        <br><br>
+        <label for="handle_social">Nome de usuário da Rede Social (sem o @):</label>
+        <input type="text" name="handle_social" id="handle_social" placeholder="Ex: jornalvozdolitoral" value="{{ cliente.handle_social or '' }}" style="width: 98%; padding: 8px;">
     </fieldset>
 
     <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
