@@ -163,8 +163,9 @@ def publicar_nas_redes(imagem_bytes, legenda, cliente):
     return
 
 def rodar_automacao_completa():
-    # (código inalterado)
-    return log_execucao
+    log_execucao = [] # <--- ADICIONE ESTA LINHA
+    conn = get_db_connection()
+    # ... resto do código ...
 
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
@@ -316,3 +317,4 @@ def excluir(id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
+
