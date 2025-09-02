@@ -1,20 +1,16 @@
-# database.py (Versão Final de Produção)
 import os
 import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
-
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+    return psycopg2.connect(DATABASE_URL)
 
 def criar_banco_de_dados():
     conn = get_db_connection()
     cur = conn.cursor()
-    
     cur.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id SERIAL PRIMARY KEY,
@@ -33,36 +29,25 @@ def criar_banco_de_dados():
             facebook_page_id TEXT,
             hashtags_fixas TEXT,
             handle_social TEXT,
-            texto_categoria_fixo TEXT
+            texto_categoria_fixo TEXT,
+            cor_borda_caixa TEXT,
+            raio_borda_caixa INTEGER DEFAULT 0
         )
     ''')
-
     cur.execute('''
         CREATE TABLE IF NOT EXISTS rss_feeds (
-            id SERIAL PRIMARY KEY,
-            cliente_id INTEGER NOT NULL,
-            url TEXT NOT NULL,
-            CONSTRAINT fk_cliente
-                FOREIGN KEY(cliente_id) 
-                REFERENCES clientes(id)
-                ON DELETE CASCADE
+            id SERIAL PRIMARY KEY, cliente_id INTEGER NOT NULL, url TEXT NOT NULL,
+            CONSTRAINT fk_cliente FOREIGN KEY(cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
         )
     ''')
-
     cur.execute('''
         CREATE TABLE IF NOT EXISTS posts_publicados (
-            id SERIAL PRIMARY KEY,
-            cliente_id INTEGER NOT NULL,
-            link_noticia TEXT NOT NULL,
+            id SERIAL PRIMARY KEY, cliente_id INTEGER NOT NULL, link_noticia TEXT NOT NULL,
             data_publicacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT fk_cliente
-                FOREIGN KEY(cliente_id) 
-                REFERENCES clientes(id)
-                ON DELETE CASCADE
+            CONSTRAINT fk_cliente FOREIGN KEY(cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
         )
     ''')
-
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Tabelas do PostgreSQL verificadas e prontas.")
+    print("✅ Tabelas do PostgreSQL (com design avançado) verificadas e prontas.")
