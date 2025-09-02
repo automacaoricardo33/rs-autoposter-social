@@ -25,7 +25,7 @@ if DATABASE_URL:
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
-LIMITE_DE_POSTS_POR_CICLO = 1
+LIMITE_DE_POSTS_POR_CICLO = 5
 
 # --- FUNÇÕES AUXILIARES ---
 def get_db_connection():
@@ -379,3 +379,4 @@ def excluir(id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
+
