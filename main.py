@@ -30,7 +30,6 @@ def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
-# (Funções de automação como buscar_noticias_novas, gerar_legenda, etc. - Sem alterações)
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     cur = conn.cursor()
     cur.execute('INSERT INTO posts_publicados (cliente_id, link_noticia) VALUES (%s, %s)', (cliente_id, link_noticia))
@@ -53,10 +52,7 @@ def buscar_noticias_novas(conn, cliente):
             feed = feedparser.parse(url)
             for entry in feed.entries:
                 if entry.link not in links_publicados:
-                    if hasattr(entry, 'published_parsed'):
-                        entry.published_date = datetime.fromtimestamp(mktime(entry.published_parsed))
-                    else:
-                        entry.published_date = datetime.now()
+                    entry.published_date = datetime.fromtimestamp(mktime(entry.published_parsed)) if hasattr(entry, 'published_parsed') else datetime.now()
                     novas_noticias.append(entry)
         except Exception as e:
             print(f"⚠️ Erro ao processar o feed {url}: {e}")
@@ -76,8 +72,7 @@ def gerar_legenda(noticia, cliente):
     if cliente['hashtags_fixas']:
         tags_fixas = cliente['hashtags_fixas'].split()
         hashtags.extend([f"#{tag.strip()}" for tag in tags_fixas])
-    legenda = f"{titulo}\n\n{resumo}\n\nLeia a matéria completa em nosso site.\n\n{fonte}\n\n{' '.join(hashtags)}"
-    return legenda
+    return f"{titulo}\n\n{resumo}\n\nLeia a matéria completa em nosso site.\n\n{fonte}\n\n{' '.join(hashtags)}"
 
 def criar_imagem_post(noticia, cliente):
     print("🎨 Criando imagem do post...")
@@ -156,7 +151,6 @@ def criar_imagem_post(noticia, cliente):
     print("✅ Imagem criada!"); return buffer_saida.getvalue()
 
 def rodar_automacao_completa():
-    # (Esta função não muda)
     log_execucao = []
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -205,14 +199,13 @@ def get_cliente(cliente_id):
     return cliente
 
 def get_available_assets():
-    """Escaneia a pasta de uploads e retorna listas de imagens e fontes."""
     imagens = []
     fontes = []
     if os.path.exists(UPLOADS_PATH):
         for f in os.listdir(UPLOADS_PATH):
             if f.lower().endswith(('.png', '.jpg', '.jpeg')):
                 imagens.append(f)
-            elif f.lower().endswith('.ttf'):
+            elif f.lower().endswith(('.ttf', '.otf')):
                 fontes.append(f)
     return sorted(imagens), sorted(fontes)
 
@@ -236,16 +229,13 @@ def index():
 @app.route('/adicionar', methods=('GET', 'POST'))
 def adicionar():
     if request.method == 'POST':
-        # Pega os nomes dos arquivos dos menus de seleção
-        logo_path = request.form.get('logo_path')
-        fonte_titulo_path = request.form.get('fonte_titulo_path')
-        fonte_categoria_path = request.form.get('fonte_categoria_path')
-        
-        # Pega o resto dos dados
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
         hashtags_fixas = request.form['hashtags_fixas']
+        logo_path = request.form.get('logo_path')
+        fonte_titulo_path = request.form.get('fonte_titulo_path')
+        fonte_categoria_path = request.form.get('fonte_categoria_path')
         cor_fundo_geral = request.form['cor_fundo_geral']
         cor_caixa_titulo = request.form['cor_caixa_titulo']
         cor_faixa_categoria = request.form['cor_faixa_categoria']
@@ -254,7 +244,6 @@ def adicionar():
         meta_api_token = request.form['meta_api_token']
         instagram_id = request.form['instagram_id']
         facebook_page_id = request.form['facebook_page_id']
-
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
@@ -262,17 +251,14 @@ def adicionar():
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id))
         novo_cliente_id = cur.fetchone()[0]
-        
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
         for url in urls:
             cur.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (%s, %s)', (novo_cliente_id, url))
-        
         conn.commit()
         cur.close()
         conn.close()
         return redirect(url_for('index'))
-
     imagens, fontes = get_available_assets()
     return render_template('adicionar_cliente.html', imagens=imagens, fontes=fontes)
 
@@ -280,16 +266,13 @@ def adicionar():
 def editar(id):
     cliente = get_cliente(id)
     if request.method == 'POST':
-        # Pega os nomes dos arquivos dos menus de seleção
-        logo_path = request.form.get('logo_path')
-        fonte_titulo_path = request.form.get('fonte_titulo_path')
-        fonte_categoria_path = request.form.get('fonte_categoria_path')
-        
-        # Pega o resto dos dados
         nome_cliente = request.form['nome_cliente']
         ativo = 1 if 'ativo' in request.form else 0
         layout_imagem = request.form['layout_imagem']
         hashtags_fixas = request.form['hashtags_fixas']
+        logo_path = request.form.get('logo_path')
+        fonte_titulo_path = request.form.get('fonte_titulo_path')
+        fonte_categoria_path = request.form.get('fonte_categoria_path')
         cor_fundo_geral = request.form['cor_fundo_geral']
         cor_caixa_titulo = request.form['cor_caixa_titulo']
         cor_faixa_categoria = request.form['cor_faixa_categoria']
@@ -298,7 +281,6 @@ def editar(id):
         meta_api_token = request.form['meta_api_token']
         instagram_id = request.form['instagram_id']
         facebook_page_id = request.form['facebook_page_id']
-        
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
@@ -309,18 +291,15 @@ def editar(id):
                 instagram_id = %s, facebook_page_id = %s
             WHERE id = %s
         ''', (nome_cliente, ativo, layout_imagem, hashtags_fixas, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_caixa_titulo, cor_faixa_categoria, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, id))
-        
         cur.execute('DELETE FROM rss_feeds WHERE cliente_id = %s', (id,))
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
         for url in urls:
             cur.execute('INSERT INTO rss_feeds (cliente_id, url) VALUES (%s, %s)', (id, url))
-        
         conn.commit()
         cur.close()
         conn.close()
         return redirect(url_for('index'))
-
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT url FROM rss_feeds WHERE cliente_id = %s', (id,))
@@ -328,7 +307,6 @@ def editar(id):
     cur.close()
     conn.close()
     rss_urls_texto = "\n".join([feed['url'] for feed in feeds_db])
-    
     imagens, fontes = get_available_assets()
     return render_template('editar_cliente.html', cliente=cliente, rss_urls_texto=rss_urls_texto, imagens=imagens, fontes=fontes)
 
