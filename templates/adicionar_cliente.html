@@ -1,17 +1,10 @@
 {% extends "base.html" %}
-
-{% block title %}
-Adicionar Novo Cliente
-{% endblock %}
-
 {% block content %}
   <h1>Adicionar Novo Cliente</h1>
   <hr>
-
-  <form method="post" style="display: flex; flex-direction: column; gap: 20px;">
-    
+  <form method="post">
     <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Informações Gerais</legend>
+        <legend>Informações Gerais</legend>
         <label for="nome_cliente">Nome do Cliente:</label>
         <input type="text" name="nome_cliente" id="nome_cliente" required style="width: 98%; padding: 8px;">
         <br><br>
@@ -22,38 +15,30 @@ Adicionar Novo Cliente
     </fieldset>
 
     <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Design e Layout</legend>
-        
+        <legend>Design e Layout</legend>
         <label for="logo_path">Logo:</label>
         <select name="logo_path" id="logo_path" style="width: 100%; padding: 8px;">
             <option value="">-- Nenhum --</option>
-            {% for imagem in imagens %}
-                <option value="{{ imagem }}">{{ imagem }}</option>
-            {% endfor %}
+            {% for imagem in imagens %}<option value="{{ imagem }}">{{ imagem }}</option>{% endfor %}
         </select>
         <br><br>
-        
-        <label for="texto_categoria_fixo">Texto Fixo da Categoria (Ex: NOTÍCIA, URGENTE):</label>
+        <label for="texto_categoria_fixo">Texto Fixo da Categoria (Ex: NOTÍCIA):</label>
         <input type="text" name="texto_categoria_fixo" id="texto_categoria_fixo" style="width: 98%; padding: 8px;">
         <br><br>
-        
-        <h4>Cores (Opcional)</h4>
+        <h4>Cores</h4>
         <label for="cor_fundo_geral">Fundo Geral:</label>
         <input type="color" name="cor_fundo_geral" id="cor_fundo_geral" value="#000000">
         <label for="cor_caixa_titulo">Fundo Caixa/Rodapé Título:</label>
-        <input type="color" name="cor_caixa_titulo" id="cor_caixa_titulo" value="#FFFFFF">
+        <input type="color" name="cor_caixa_titulo" id="cor_caixa_titulo" value="#051d40">
         <label for="cor_faixa_categoria">Fundo Faixa Categoria:</label>
         <input type="color" name="cor_faixa_categoria" id="cor_faixa_categoria">
-        
         <h4>Textos e Fontes</h4>
         <label for="cor_texto_titulo">Cor do Título:</label>
-        <input type="color" name="cor_texto_titulo" id="cor_texto_titulo" value="#000000">
+        <input type="color" name="cor_texto_titulo" id="cor_texto_titulo" value="#FFFFFF">
         <label for="fonte_titulo_path">Fonte do Título:</label>
         <select name="fonte_titulo_path" id="fonte_titulo_path" style="width: 100%; padding: 8px;">
             <option value="">-- Nenhuma --</option>
-            {% for fonte in fontes %}
-                <option value="{{ fonte }}">{{ fonte }}</option>
-            {% endfor %}
+            {% for fonte in fontes %}<option value="{{ fonte }}">{{ fonte }}</option>{% endfor %}
         </select>
         <br><br>
         <label for="cor_texto_categoria">Cor da Categoria:</label>
@@ -61,15 +46,13 @@ Adicionar Novo Cliente
         <label for="fonte_categoria_path">Fonte da Categoria:</label>
         <select name="fonte_categoria_path" id="fonte_categoria_path" style="width: 100%; padding: 8px;">
             <option value="">-- Nenhuma --</option>
-            {% for fonte in fontes %}
-                <option value="{{ fonte }}">{{ fonte }}</option>
-            {% endfor %}
+            {% for fonte in fontes %}<option value="{{ fonte }}">{{ fonte }}</option>{% endfor %}
         </select>
     </fieldset>
 
     <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Conteúdo Final</legend>
-        <label for="hashtags_fixas">Hashtags Fixas (separe com espaço, não inclua o #):</label>
+        <legend>Conteúdo Final</legend>
+        <label for="hashtags_fixas">Hashtags Fixas (separe com espaço, sem #):</label>
         <textarea name="hashtags_fixas" id="hashtags_fixas" rows="3" style="width: 98%;"></textarea>
         <br><br>
         <label for="handle_social">Nome de usuário da Rede Social (sem o @):</label>
@@ -77,7 +60,7 @@ Adicionar Novo Cliente
     </fieldset>
 
     <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <legend style="font-weight: bold; padding: 0 10px;">Credenciais (Tokens)</legend>
+        <legend>Credenciais (Tokens)</legend>
         <label for="meta_api_token">Token da API da Meta:</label>
         <textarea name="meta_api_token" id="meta_api_token" rows="3" style="width: 98%;"></textarea>
         <br><br>
@@ -90,7 +73,87 @@ Adicionar Novo Cliente
 
     <div style="text-align: right;">
       <a href="/" style="margin-right: 15px;">Cancelar</a>
-      <button type="submit" style="background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer;">Salvar Cliente</button>
+      <button type="submit">Salvar Cliente</button>
+    </div>
+  </form>
+{% endblock %}
+
+{% extends "base.html" %}
+{% block content %}
+  <h1>Editar Cliente: {{ cliente['nome_cliente'] }}</h1>
+  <hr>
+  <form method="post">
+    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <legend>Informações Gerais</legend>
+        <label for="nome_cliente">Nome do Cliente:</label>
+        <input type="text" name="nome_cliente" id="nome_cliente" required value="{{ cliente.nome_cliente }}" style="width: 98%; padding: 8px;">
+        <br><br>
+        <label for="rss_urls">URLs dos Feeds RSS (uma por linha):</label>
+        <textarea name="rss_urls" id="rss_urls" required rows="5" style="width: 98%; padding: 8px;">{{ rss_urls_texto }}</textarea>
+        <br><br>
+        <label><input type="checkbox" name="ativo" {% if cliente.ativo == 1 %}checked{% endif %}> Automação Ativa</label>
+    </fieldset>
+
+    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <legend>Design e Layout</legend>
+        <label for="logo_path">Logo:</label>
+        <select name="logo_path" id="logo_path" style="width: 100%; padding: 8px;">
+            <option value="">-- Nenhum --</option>
+            {% for imagem in imagens %}<option value="{{ imagem }}" {% if imagem == cliente.logo_path %}selected{% endif %}>{{ imagem }}</option>{% endfor %}
+        </select>
+        <br><br>
+        <label for="texto_categoria_fixo">Texto Fixo da Categoria (Ex: NOTÍCIA):</label>
+        <input type="text" name="texto_categoria_fixo" id="texto_categoria_fixo" value="{{ cliente.texto_categoria_fixo or '' }}" style="width: 98%; padding: 8px;">
+        <br><br>
+        <h4>Cores</h4>
+        <label for="cor_fundo_geral">Fundo Geral:</label>
+        <input type="color" name="cor_fundo_geral" id="cor_fundo_geral" value="{{ cliente.cor_fundo_geral or '#000000' }}">
+        <label for="cor_caixa_titulo">Fundo Caixa/Rodapé Título:</label>
+        <input type="color" name="cor_caixa_titulo" id="cor_caixa_titulo" value="{{ cliente.cor_caixa_titulo or '' }}">
+        <label for="cor_faixa_categoria">Fundo Faixa Categoria:</label>
+        <input type="color" name="cor_faixa_categoria" id="cor_faixa_categoria" value="{{ cliente.cor_faixa_categoria or '' }}">
+        <h4>Textos e Fontes</h4>
+        <label for="cor_texto_titulo">Cor do Título:</label>
+        <input type="color" name="cor_texto_titulo" id="cor_texto_titulo" value="{{ cliente.cor_texto_titulo or '#FFFFFF' }}">
+        <label for="fonte_titulo_path">Fonte do Título:</label>
+        <select name="fonte_titulo_path" id="fonte_titulo_path" style="width: 100%; padding: 8px;">
+            <option value="">-- Nenhuma --</option>
+            {% for fonte in fontes %}<option value="{{ fonte }}" {% if fonte == cliente.fonte_titulo_path %}selected{% endif %}>{{ fonte }}</option>{% endfor %}
+        </select>
+        <br><br>
+        <label for="cor_texto_categoria">Cor da Categoria:</label>
+        <input type="color" name="cor_texto_categoria" id="cor_texto_categoria" value="{{ cliente.cor_texto_categoria or '#FFFFFF' }}">
+        <label for="fonte_categoria_path">Fonte da Categoria:</label>
+        <select name="fonte_categoria_path" id="fonte_categoria_path" style="width: 100%; padding: 8px;">
+            <option value="">-- Nenhuma --</option>
+            {% for fonte in fontes %}<option value="{{ fonte }}" {% if fonte == cliente.fonte_categoria_path %}selected{% endif %}>{{ fonte }}</option>{% endfor %}
+        </select>
+    </fieldset>
+
+    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <legend>Conteúdo Final</legend>
+        <label for="hashtags_fixas">Hashtags Fixas (separe com espaço, sem #):</label>
+        <textarea name="hashtags_fixas" id="hashtags_fixas" rows="3" style="width: 98%;">{{ cliente.hashtags_fixas or '' }}</textarea>
+        <br><br>
+        <label for="handle_social">Nome de usuário da Rede Social (sem o @):</label>
+        <input type="text" name="handle_social" id="handle_social" placeholder="Ex: jornalvozdolitoral" value="{{ cliente.handle_social or '' }}" style="width: 98%; padding: 8px;">
+    </fieldset>
+
+    <fieldset style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <legend>Credenciais (Tokens)</legend>
+        <label for="meta_api_token">Token da API da Meta:</label>
+        <textarea name="meta_api_token" id="meta_api_token" rows="3" style="width: 98%;">{{ cliente.meta_api_token or '' }}</textarea>
+        <br><br>
+        <label for="instagram_id">ID da Conta do Instagram:</label>
+        <input type="text" name="instagram_id" id="instagram_id" value="{{ cliente.instagram_id or '' }}" style="width: 98%; padding: 8px;">
+        <br><br>
+        <label for="facebook_page_id">ID da Página do Facebook:</label>
+        <input type="text" name="facebook_page_id" id="facebook_page_id" value="{{ cliente.facebook_page_id or '' }}" style="width: 98%; padding: 8px;">
+    </fieldset>
+
+    <div style="text-align: right;">
+      <a href="/" style="margin-right: 15px;">Cancelar</a>
+      <button type="submit">Salvar Alterações</button>
     </div>
   </form>
 {% endblock %}
