@@ -1,4 +1,4 @@
-# database.py (Versão PostgreSQL)
+# database.py (Versão Final de Produção)
 import os
 import psycopg2
 from dotenv import load_dotenv
@@ -8,16 +8,13 @@ load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 def get_db_connection():
-    """Cria uma conexão com o banco de dados PostgreSQL."""
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 def criar_banco_de_dados():
-    """Cria as tabelas no banco de dados PostgreSQL, se não existirem."""
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Sintaxe SERIAL PRIMARY KEY é para PostgreSQL
     cur.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id SERIAL PRIMARY KEY,
@@ -35,7 +32,9 @@ def criar_banco_de_dados():
             meta_api_token TEXT,
             instagram_id TEXT,
             facebook_page_id TEXT,
-            hashtags_fixas TEXT
+            hashtags_fixas TEXT,
+            handle_social TEXT,
+            texto_categoria_fixo TEXT
         )
     ''')
 
