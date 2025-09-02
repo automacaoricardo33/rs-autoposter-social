@@ -78,89 +78,108 @@ def gerar_legenda(noticia, cliente):
     return f"{titulo}\n\n{resumo}\n\nLeia a matéria completa em nosso site.\n\n{fonte}\n\n{' '.join(hashtags)}"
 
 def criar_imagem_post(noticia, cliente):
-    print("🎨 Criando imagem com design inteligente...")
+    print("🎨 Criando imagem com design final...")
     titulo = noticia.title.upper()
     categoria = (cliente['texto_categoria_fixo'] or (noticia.tags[0].term if hasattr(noticia, 'tags') and noticia.tags else "")).upper()
     url_imagem_noticia = None
     if hasattr(noticia, 'links'):
         for link in noticia.links:
-            if link.get('type', '').startswith('image/'): url_imagem_noticia = link.href; break
+            if link.get('type','').startswith('image/'): url_imagem_noticia = link.href; break
     if not url_imagem_noticia and hasattr(noticia, 'media_content'):
         for media in noticia.media_content:
-            if media.get('type', '').startswith('image/'): url_imagem_noticia = media.get('url'); break
+            if media.get('type','').startswith('image/'): url_imagem_noticia = media.get('url'); break
     html_content = noticia.summary if hasattr(noticia, 'summary') else ""
     if not url_imagem_noticia and html_content:
         soup = BeautifulSoup(html_content, 'html.parser')
         img_tag = soup.find('img')
         if img_tag and img_tag.get('src'): url_imagem_noticia = img_tag['src']
-    if not url_imagem_noticia: return (False, "Nenhuma imagem encontrada no post RSS.")
+    if not url_imagem_noticia: return (False, "Nenhuma imagem encontrada.")
+
     print(f"🖼️ Imagem encontrada: {url_imagem_noticia}")
-    cor_fundo = cliente['cor_fundo_geral'] or '#000000'
+    cor_fundo = cliente['cor_fundo_geral'] or '#FFFFFF'
     fundo = Image.new('RGB', (IMG_WIDTH, IMG_HEIGHT), cor_fundo)
-    draw = ImageDraw.Draw(fundo)
+    draw = ImageDraw.Draw(fundo, 'RGBA')
+    
     try:
         response_img = requests.get(url_imagem_noticia, stream=True, headers={'User-Agent': 'Mozilla/5.0'}); response_img.raise_for_status()
         imagem_noticia = Image.open(io.BytesIO(response_img.content))
         img_w, img_h = 1080, 750
         imagem_noticia = ImageOps.fit(imagem_noticia, (img_w, img_h), Image.Resampling.LANCZOS)
         fundo.paste(imagem_noticia, (0, 0))
-    except Exception as e: return (False, f"Erro ao processar imagem da notícia: {e}")
+    except Exception as e:
+        return (False, f"Erro ao processar imagem: {e}")
+
     tem_faixa_categoria = categoria and (cliente['cor_faixa_categoria'] not in [None, '', '#000000'])
-    cor_rodape = cliente['cor_caixa_titulo'] or '#051d40'
+    
+    # Desenha caixa de título com borda e cantos arredondados
+    cor_caixa_titulo = cliente['cor_caixa_titulo'] or '#051d40'
+    cor_borda = cliente['cor_borda_caixa'] or None
+    raio = cliente['raio_borda_caixa'] or 0
+    box_coords = [40, 780, 1040, 1000]
+    
+    if cor_borda:
+        draw.rounded_rectangle(box_coords, radius=raio, fill=cor_borda)
+        draw.rounded_rectangle([box_coords[0]+5, box_coords[1]+5, box_coords[2]-5, box_coords[3]-5], radius=raio, fill=cor_caixa_titulo)
+    else:
+        draw.rounded_rectangle(box_coords, radius=raio, fill=cor_caixa_titulo)
+        
+    # Lógica do Logo
+    if cliente['logo_path']:
+        try:
+            caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
+            logo = Image.open(caminho_logo).convert("RGBA")
+            
+            # Reduz o tamanho do logo em 15%
+            logo_w, logo_h = logo.size
+            novo_tamanho = (int(logo_w * 0.85), int(logo_h * 0.85))
+            logo.thumbnail(novo_tamanho)
+            
+            if tem_faixa_categoria:
+                # Logo sobe
+                fundo.paste(logo, (40, 40), logo)
+            else:
+                # Logo no centro
+                pos_x = (IMG_WIDTH - logo.width) // 2
+                pos_y = 680 - (logo.height // 2)
+                fundo.paste(logo, (pos_x, pos_y), logo)
+        except Exception as e: print(f"⚠️ Erro no logo: {e}")
+
+    # Faixa de Categoria
     if tem_faixa_categoria:
-        cor_faixa = cliente['cor_faixa_categoria']
-        draw.rectangle([(0, 650), (1080, 750)], fill=cor_faixa)
+        draw.rectangle([(0, 680), (1080, 750)], fill=cliente['cor_faixa_categoria'])
         if cliente['fonte_categoria_path']:
             try:
-                caminho_fonte_cat = os.path.join(UPLOADS_PATH, cliente['fonte_categoria_path'])
-                fonte_cat = ImageFont.truetype(caminho_fonte_cat, 60) # <-- AJUSTADO
-                draw.text((540, 700), categoria, font=fonte_cat, fill=cliente['cor_texto_categoria'] or "#FFFFFF", anchor="mm", align="center")
-            except Exception as e: print(f"⚠️ Erro fonte categoria: {e}")
-        draw.rectangle([(0, 750), (1080, 980)], fill=cor_rodape)
-        if cliente['logo_path']:
-            try:
-                caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
-                logo = Image.open(caminho_logo).convert("RGBA")
-                logo_original_w, logo_original_h = logo.size
-                novo_tamanho = (int(logo_original_w * 0.85), int(logo_original_h * 0.85))
-                logo.thumbnail(novo_tamanho)
-                fundo.paste(logo, (40, 40), logo) # Logo sobe
-            except Exception as e: print(f"⚠️ Erro no logo: {e}")
-    else:
-        draw.rectangle([(0, 680), (1080, 1080)], fill=cor_rodape)
-        if cliente['logo_path']:
-            try:
-                caminho_logo = os.path.join(UPLOADS_PATH, cliente['logo_path'])
-                logo = Image.open(caminho_logo).convert("RGBA")
-                logo_original_w, logo_original_h = logo.size
-                novo_tamanho = (int(logo_original_w * 0.85), int(logo_original_h * 0.85))
-                logo.thumbnail(novo_tamanho)
-                pos_x_logo = (IMG_WIDTH - logo.width) // 2
-                pos_y_logo = 680 - (logo.height // 2)
-                fundo.paste(logo, (pos_x_logo, pos_y_logo), logo)
-            except Exception as e: print(f"⚠️ Erro no logo: {e}")
+                caminho_fonte = os.path.join(UPLOADS_PATH, cliente['fonte_categoria_path'])
+                fonte = ImageFont.truetype(caminho_fonte, 60) # <-- TAMANHO AJUSTADO
+                draw.text((540, 715), categoria, font=fonte, fill=cliente['cor_texto_categoria'] or "#FFFFFF", anchor="mm")
+            except Exception as e: print(f"⚠️ Erro na fonte da categoria: {e}")
+
+    # Título
     try:
         caminho_fonte_titulo = os.path.join(UPLOADS_PATH, cliente['fonte_titulo_path'])
-        fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 50) # <-- AJUSTADO
+        fonte_titulo = ImageFont.truetype(caminho_fonte_titulo, 50) # <-- TAMANHO AJUSTADO
         cor_texto_titulo = cliente['cor_texto_titulo'] or '#FFFFFF'
-        linhas_texto = textwrap.wrap(titulo, width=35)
-        texto_junto = "\n".join(linhas_texto)
-        draw.text((540, 865), texto_junto, font=fonte_titulo, fill=cor_texto_titulo, anchor="mm", align="center")
-    except Exception as e: return (False, f"Erro na fonte/texto do título: {e}")
+        linhas = textwrap.wrap(titulo, width=30)
+        texto_renderizado = "\n".join(linhas)
+        draw.text((540, 890), texto_renderizado, font=fonte_titulo, fill=cor_texto_titulo, anchor="mm", align="center")
+    except Exception as e:
+        return (False, f"Erro na fonte do título: {e}")
+
+    # Handle Social
     if cliente['handle_social']:
         try:
-            texto_cta = f"@{cliente['handle_social'].upper()}"
-            fonte_cta = ImageFont.truetype("Anton-Regular.ttf", 45) # <-- AJUSTADO
-            cor_cta = '#000000' if cor_rodape.lower() == '#ffffff' else '#FFFFFF'
-            draw.text((540, 1030), texto_cta, font=fonte_cta, fill=cor_cta, anchor="ms", align="center")
-        except Exception as e: print(f"⚠️ Erro no handle social: {e}")
+            fonte_handle = ImageFont.truetype("Anton-Regular.ttf", 45) # <-- TAMANHO AJUSTADO
+            draw.text((540, 1040), f"@{cliente['handle_social'].upper()}", font=fonte_handle, fill="#333333", anchor="ms")
+        except Exception as e: print(f"⚠️ Erro no handle: {e}")
+        
     try:
         fonte_assinatura = ImageFont.truetype("Raleway-VariableFont_wght.ttf", 20)
         draw.text((IMG_WIDTH / 2, IMG_HEIGHT - 15), ASSINATURA, font=fonte_assinatura, fill=(100, 100, 100, 255), anchor="ms", align="center")
     except Exception: pass
+
     buffer_saida = io.BytesIO()
-    fundo.save(buffer_saida, format='JPEG', quality=90)
-    print("✅ Imagem com novo design criada!"); return (True, buffer_saida.getvalue())
+    fundo.save(buffer_saida, format='JPEG', quality=95)
+    print("✅ Imagem final criada!"); return (True, buffer_saida.getvalue())
 
 def publicar_nas_redes(imagem_bytes, legenda, cliente):
     token = cliente['meta_api_token']
@@ -299,12 +318,14 @@ def adicionar():
         hashtags_fixas = request.form['hashtags_fixas']
         handle_social = request.form['handle_social']
         texto_categoria_fixo = request.form['texto_categoria_fixo']
+        cor_borda_caixa = request.form['cor_borda_caixa']
+        raio_borda_caixa = int(request.form['raio_borda_caixa'] or 0)
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
-            INSERT INTO clientes (nome_cliente, ativo, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_faixa_categoria, cor_caixa_titulo, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, hashtags_fixas, handle_social, texto_categoria_fixo) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
-        ''', (nome_cliente, ativo, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_faixa_categoria, cor_caixa_titulo, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, hashtags_fixas, handle_social, texto_categoria_fixo))
+            INSERT INTO clientes (nome_cliente, ativo, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_faixa_categoria, cor_caixa_titulo, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, hashtags_fixas, handle_social, texto_categoria_fixo, cor_borda_caixa, raio_borda_caixa) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        ''', (nome_cliente, ativo, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_faixa_categoria, cor_caixa_titulo, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, hashtags_fixas, handle_social, texto_categoria_fixo, cor_borda_caixa, raio_borda_caixa))
         novo_cliente_id = cur.fetchone()[0]
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
@@ -337,6 +358,8 @@ def editar(id):
         hashtags_fixas = request.form['hashtags_fixas']
         handle_social = request.form['handle_social']
         texto_categoria_fixo = request.form['texto_categoria_fixo']
+        cor_borda_caixa = request.form['cor_borda_caixa']
+        raio_borda_caixa = int(request.form['raio_borda_caixa'] or 0)
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
@@ -344,9 +367,9 @@ def editar(id):
                 nome_cliente = %s, ativo = %s, logo_path = %s, fonte_titulo_path = %s, fonte_categoria_path = %s,
                 cor_fundo_geral = %s, cor_faixa_categoria = %s, cor_caixa_titulo = %s, cor_texto_titulo = %s,
                 cor_texto_categoria = %s, meta_api_token = %s, instagram_id = %s, facebook_page_id = %s,
-                hashtags_fixas = %s, handle_social = %s, texto_categoria_fixo = %s
+                hashtags_fixas = %s, handle_social = %s, texto_categoria_fixo = %s, cor_borda_caixa = %s, raio_borda_caixa = %s
             WHERE id = %s
-        ''', (nome_cliente, ativo, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_faixa_categoria, cor_caixa_titulo, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, hashtags_fixas, handle_social, texto_categoria_fixo, id))
+        ''', (nome_cliente, ativo, logo_path, fonte_titulo_path, fonte_categoria_path, cor_fundo_geral, cor_faixa_categoria, cor_caixa_titulo, cor_texto_titulo, cor_texto_categoria, meta_api_token, instagram_id, facebook_page_id, hashtags_fixas, handle_social, texto_categoria_fixo, cor_borda_caixa, raio_borda_caixa, id))
         cur.execute('DELETE FROM rss_feeds WHERE cliente_id = %s', (id,))
         rss_urls_texto = request.form['rss_urls']
         urls = [url.strip() for url in rss_urls_texto.splitlines() if url.strip()]
@@ -379,4 +402,3 @@ def excluir(id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
-
