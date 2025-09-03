@@ -18,6 +18,7 @@ load_dotenv()
 app = Flask(__name__)
 DATABASE_URL = os.getenv('DATABASE_URL')
 UPLOADS_PATH = os.path.join('static', 'uploads')
+
 if DATABASE_URL:
     criar_banco_de_dados()
 
