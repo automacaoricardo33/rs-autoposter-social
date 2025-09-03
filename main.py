@@ -104,8 +104,8 @@ def criar_imagem_post(noticia, cliente):
     except Exception as e: return (False, f"Erro ao processar imagem: {e}")
     tem_faixa_categoria = categoria and (cliente['cor_faixa_categoria'] not in [None, '', '#000000'])
     cor_caixa_titulo = cliente['cor_caixa_titulo'] or '#051d40'
-    cor_borda = cliente['cor_borda_caixa'] or None
-    raio = cliente['raio_borda_caixa'] or 0
+    cor_borda = cliente.get('cor_borda_caixa') or None
+    raio = cliente.get('raio_borda_caixa') or 0
     box_coords = [40, 780, 1040, 1000]
     if cor_borda:
         draw.rounded_rectangle(box_coords, radius=raio, fill=cor_borda)
@@ -141,7 +141,7 @@ def criar_imagem_post(noticia, cliente):
         texto_renderizado = "\n".join(linhas)
         draw.text((540, 890), texto_renderizado, font=fonte_titulo, fill=cor_texto_titulo, anchor="mm", align="center")
     except Exception as e: return (False, f"Erro na fonte do título: {e}")
-    if cliente['handle_social']:
+    if cliente.get('handle_social'):
         try:
             fonte_handle = ImageFont.truetype("Anton-Regular.ttf", 45)
             draw.text((540, 1040), f"@{cliente['handle_social'].upper()}", font=fonte_handle, fill="#333333", anchor="ms")
