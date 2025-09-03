@@ -1,4 +1,3 @@
-# main.py (Versão FINAL com Resposta Otimizada para Agendador)
 import os
 import psycopg2
 import psycopg2.extras
@@ -26,7 +25,7 @@ if DATABASE_URL:
 
 ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
-LIMITE_DE_POSTS_POR_CICLO = 5 # Mantido em 5 como você pediu
+LIMITE_DE_POSTS_POR_CICLO = 5
 
 # --- FUNÇÕES AUXILIARES ---
 def get_db_connection():
@@ -159,23 +158,85 @@ def criar_imagem_post(noticia, cliente):
     print("✅ Imagem final criada!"); return (True, buffer_saida.getvalue())
 
 def publicar_nas_redes(imagem_bytes, legenda, cliente):
-    # (código inalterado)
-    return
+    token = cliente['meta_api_token']
+    insta_id = cliente['instagram_id']
+    page_id = cliente['facebook_page_id']
+    if all([token, insta_id, page_id]):
+        try:
+            print("--- Publicando no Instagram ---")
+            upload_url = f"https://graph.facebook.com/{page_id}/photos"
+            files = {'source': ('post.jpg', io.BytesIO(imagem_bytes), 'image/jpeg')}
+            params = {'published': 'false', 'access_token': token}
+            r_upload = requests.post(upload_url, files=files, params=params); r_upload.raise_for_status()
+            photo_id = r_upload.json()['id']
+            photo_info_url = f"https://graph.facebook.com/{photo_id}?fields=images&access_token={token}"
+            r_photo_info = requests.get(photo_info_url); r_photo_info.raise_for_status()
+            image_url = r_photo_info.json()['images'][0]['source']
+            url_container = f"https://graph.facebook.com/v19.0/{insta_id}/media"
+            params_container = {'image_url': image_url, 'caption': legenda, 'access_token': token}
+            r_container = requests.post(url_container, params=params_container); r_container.raise_for_status()
+            id_criacao = r_container.json()['id']
+            for _ in range(10):
+                status_url = f"https://graph.facebook.com/{id_criacao}?fields=status_code&access_token={token}"
+                r_status = requests.get(status_url).json()
+                if r_status.get('status_code') == 'FINISHED': break
+                time.sleep(3)
+            url_publicacao = f"https://graph.facebook.com/v19.0/{insta_id}/media_publish"
+            params_publicacao = {'creation_id': id_criacao, 'access_token': token}
+            requests.post(url_publicacao, params=params_publicacao).raise_for_status()
+            print("✅ Post publicado no Instagram!")
+        except Exception as e: print(f"❌ Erro ao publicar no Instagram: {e}")
+    if all([token, page_id]):
+        try:
+            print("--- Publicando no Facebook ---")
+            url_post_foto = f"https://graph.facebook.com/{page_id}/photos"
+            files = {'source': ('post.jpg', io.BytesIO(imagem_bytes), 'image/jpeg')}
+            params = {'message': legenda, 'access_token': token}
+            requests.post(url_post_foto, files=files, params=params).raise_for_status()
+            print("✅ Post publicado no Facebook!")
+        except Exception as e: print(f"❌ Erro ao publicar no Facebook: {e}")
 
 def rodar_automacao_completa():
-    log_execucao = [] # <--- ADICIONE ESTA LINHA
+    log_execucao = []
     conn = get_db_connection()
-    # ... resto do código ...
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM clientes WHERE ativo = 1')
+    clientes_ativos = cur.fetchall()
+    cur.close()
+    if not clientes_ativos:
+        log_execucao.append("Nenhum cliente ativo encontrado.")
+        conn.close()
+        return log_execucao
+    for cliente in clientes_ativos:
+        novas_noticias = buscar_noticias_novas(conn, cliente)
+        if not novas_noticias:
+            log_execucao.append(f"Nenhuma notícia nova para {cliente['nome_cliente']}.")
+            continue
+        log_execucao.append(f"Encontradas {len(novas_noticias)} notícias. Processando até {LIMITE_DE_POSTS_POR_CICLO}.")
+        posts_neste_ciclo = 0
+        for noticia_para_postar in novas_noticias:
+            if posts_neste_ciclo >= LIMITE_DE_POSTS_POR_CICLO:
+                log_execucao.append(f"Limite de {LIMITE_DE_POSTS_POR_CICLO} posts atingido."); break
+            log_execucao.append(f"✅ Processando: '{noticia_para_postar.title}'")
+            sucesso_img, resultado_img = criar_imagem_post(noticia_para_postar, cliente)
+            if not sucesso_img:
+                log_execucao.append(f"❌ Falha na imagem: {resultado_img}"); continue
+            imagem_bytes = resultado_img
+            legenda = gerar_legenda(noticia_para_postar, cliente)
+            publicar_nas_redes(imagem_bytes, legenda, cliente)
+            marcar_como_publicado(conn, cliente['id'], noticia_para_postar.link)
+            log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído. ---")
+            posts_neste_ciclo += 1
+    conn.close()
+    return log_execucao
 
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
     print("🚀 Disparando automação via rota secreta...")
-    rodar_automacao_completa() # Executa a automação
+    rodar_automacao_completa()
     print("🏁 Automação finalizada.")
-    # MUDANÇA PRINCIPAL AQUI: Retorna uma mensagem curta e leve
     return jsonify({"status": "execucao_concluida"})
 
-# (O restante do código do painel CRUD continua aqui, sem nenhuma alteração)
 def get_cliente(cliente_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -317,4 +378,3 @@ def excluir(id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
-
