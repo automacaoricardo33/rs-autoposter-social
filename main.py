@@ -14,7 +14,6 @@ from time import mktime
 from bs4 import BeautifulSoup
 import time
 
-# --- CONFIGURAÇÃO ---
 load_dotenv()
 app = Flask(__name__)
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -27,10 +26,8 @@ ASSINATURA = "Desenvolvido por: Studio RS Ilhabela - +55 12 99627-3989"
 IMG_WIDTH, IMG_HEIGHT = 1080, 1080
 LIMITE_DE_POSTS_POR_CICLO = 5
 
-# --- FUNÇÕES AUXILIARES ---
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+    return psycopg2.connect(DATABASE_URL)
 
 def marcar_como_publicado(conn, cliente_id, link_noticia):
     cur = conn.cursor()
@@ -78,7 +75,7 @@ def gerar_legenda(noticia, cliente):
     return f"{titulo}\n\n{resumo}\n\nLeia a matéria completa em nosso site.\n\n{fonte}\n\n{' '.join(hashtags)}"
 
 def criar_imagem_post(noticia, cliente):
-    print("🎨 Criando imagem com design inteligente...")
+    print("🎨 Criando imagem com design final...")
     titulo = noticia.title.upper()
     categoria = (cliente['texto_categoria_fixo'] or (noticia.tags[0].term if hasattr(noticia, 'tags') and noticia.tags else "")).upper()
     url_imagem_noticia = None
@@ -93,7 +90,7 @@ def criar_imagem_post(noticia, cliente):
         soup = BeautifulSoup(html_content, 'html.parser')
         img_tag = soup.find('img')
         if img_tag and img_tag.get('src'): url_imagem_noticia = img_tag['src']
-    if not url_imagem_noticia: return (False, "Nenhuma imagem encontrada no post RSS.")
+    if not url_imagem_noticia: return (False, "Nenhuma imagem encontrada.")
     print(f"🖼️ Imagem encontrada: {url_imagem_noticia}")
     cor_fundo = cliente['cor_fundo_geral'] or '#FFFFFF'
     fundo = Image.new('RGB', (IMG_WIDTH, IMG_HEIGHT), cor_fundo)
@@ -206,7 +203,7 @@ def rodar_automacao_completa():
     if not clientes_ativos:
         log_execucao.append("Nenhum cliente ativo encontrado.")
         conn.close()
-        return log_execucao
+        return
     for cliente in clientes_ativos:
         novas_noticias = buscar_noticias_novas(conn, cliente)
         if not novas_noticias:
@@ -228,7 +225,6 @@ def rodar_automacao_completa():
             log_execucao.append(f"--- Post para '{noticia_para_postar.title}' concluído. ---")
             posts_neste_ciclo += 1
     conn.close()
-    return log_execucao
 
 @app.route('/rodar-automacao-agora')
 def rota_automacao():
